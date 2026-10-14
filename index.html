@@ -1,0 +1,3695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Quote/Invoice Builder</title>
+<style>
+  :root{
+    --ink:#1e2126;
+    --ink-soft:#565d66;
+    --paper:#ffffff;
+    --app-bg:#20242b;
+    --line:#d7dbe0;
+    --amber:#e08a2c;
+    --amber-dark:#c4741d;
+    --amber-tint:#fdf1e3;
+    --danger:#c0432f;
+    --radius:3px;
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      linear-gradient(var(--app-bg),var(--app-bg)) fixed,
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 28px) fixed,
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 28px) fixed;
+    background-color:var(--app-bg);
+    min-height:100vh;
+    color:var(--ink);
+    padding-bottom:80px;
+  }
+
+  /* ---------- Top toolbar ---------- */
+  .toolbar{
+    position:sticky; top:0; z-index:40;
+    display:flex; align-items:center; gap:10px;
+    padding:12px 16px;
+    background:#171a1f;
+    border-bottom:1px solid #33393f;
+    flex-wrap:wrap;
+  }
+  .toolbar .brandmark{
+    display:flex; align-items:center; gap:8px;
+    color:#f4f1ea; font-weight:700; letter-spacing:.02em; font-size:15px;
+    margin-right:auto;
+  }
+  .brandmark .tick{
+    width:10px;height:10px;background:var(--amber);
+    transform:rotate(45deg);
+  }
+  button{
+    font-family:inherit; cursor:pointer; border:none;
+    border-radius:var(--radius);
+    padding:9px 14px; font-size:13px; font-weight:600;
+    transition:transform .06s ease, background .15s ease;
+  }
+  button:active{ transform:translateY(1px); }
+  button:disabled{ opacity:.38; cursor:default; }
+  button:disabled:active{ transform:none; }
+  .btn-primary{ background:var(--amber); color:#1a1a1a; }
+  .btn-primary:hover{ background:var(--amber-dark); }
+  .btn-ghost{ background:#2b3038; color:#e7e5df; }
+  .btn-ghost:hover{ background:#383f49; }
+  .btn-ghost:disabled:hover{ background:#2b3038; }
+  .btn-manual{ background:#2b3038; color:#e7e5df; border:1px solid #454c56; }
+  .btn-manual.active{ background:var(--amber); color:#1a1a1a; border-color:var(--amber); }
+  .autosave-note{ color:#8a9099; font-size:11.5px; margin-left:4px; }
+  .btn-danger{ background:transparent; color:#e2a79b; border:1px solid #5a3730; }
+  .btn-danger:hover{ background:#3a2622; }
+
+  /* ---------- View switching (list vs editor) ---------- */
+  body.view-list .editor-only{ display:none !important; }
+  body.view-editor .list-only{ display:none !important; }
+
+  /* ---------- Quotation list ---------- */
+  .list-wrap{ max-width:1080px; margin:0 auto; padding:34px 16px 60px; }
+  .list-header{ display:flex; flex-direction:column; gap:4px; margin-bottom:22px; }
+  .list-header-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .list-header-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .list-header h1{ color:#f4f1ea; font-size:22px; margin:0; }
+  .list-sub{ color:#9aa0a8; font-size:13px; margin:0; }
+  .list-toolbar-row{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:12px; }
+  .view-toggle{ display:flex; gap:4px; }
+  .view-btn{ background:#2b3038; color:#c7cbd1; padding:7px 12px; font-size:12px; }
+  .view-btn.active{ background:var(--amber); color:#1a1a1a; }
+  .sort-controls{ display:flex; align-items:center; gap:6px; color:#9aa0a8; font-size:12.5px; }
+  .sort-controls select{ background:#2b3038; color:#e7e5df; border:1px solid #454c56; border-radius:3px; padding:6px 8px; font-size:12px; }
+  .trash-bulk-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .list-empty{
+    color:#9aa0a8; font-size:14px; text-align:center; padding:60px 20px;
+    border:1.5px dashed #3a4048; border-radius:6px;
+  }
+  .doc-type-badge{
+    display:inline-block; font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+    padding:2px 6px; border-radius:2px; margin-right:6px; vertical-align:middle;
+  }
+  .doc-type-badge.quotation{ background:#e4e9ee; color:#4a5568; }
+  .doc-type-badge.invoice{ background:#fdecd2; color:#8a5a15; }
+
+  /* Grid (card) mode */
+  .quote-list{ display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:16px; }
+  .quote-card{
+    background:#fff; border-radius:6px; padding:16px 16px 14px; box-shadow:0 6px 20px rgba(0,0,0,.25);
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .quote-card-main{ cursor:pointer; }
+  .quote-card-title{ font-weight:800; font-size:15px; color:var(--ink); }
+  .quote-card-sub{ font-size:13px; color:var(--ink); margin-top:2px; font-weight:700; }
+  .quote-card-meta{ font-size:12.5px; color:var(--ink-soft); margin-top:6px; display:flex; justify-content:space-between; }
+  .quote-card-meta .amt{ font-weight:700; color:var(--ink); }
+  .quote-card-updated{ font-size:10.5px; color:#a9adb2; margin-top:2px; }
+  .quote-card-actions{ display:flex; gap:6px; margin-top:6px; }
+  .quote-card-actions button{ flex:1; padding:7px 8px; font-size:11.5px; }
+  .quote-card-checkbox{ margin-right:6px; }
+  .qc-open{ background:var(--amber); color:#1a1a1a; }
+  .qc-open:hover{ background:var(--amber-dark); }
+  .qc-dup{ background:#eef0f2; color:var(--ink); }
+  .qc-dup:hover{ background:#e2e5e8; }
+  .qc-del{ background:transparent; color:#a2453a; border:1px solid #e3c8c4; }
+  .qc-del:hover{ background:#fdf1ef; }
+  @media (max-width:720px){
+    .quote-list{ grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width:460px){
+    .quote-list{ grid-template-columns:1fr; }
+  }
+
+  /* List (row) mode */
+  .quote-list.list-mode{ display:flex; flex-direction:column; gap:0; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,.25); }
+  .quote-row-header, .quote-row{
+    display:grid;
+    grid-template-columns: 22px 1.4fr 1fr 0.85fr 0.85fr 0.85fr 130px auto;
+    align-items:center; gap:10px; padding:11px 14px;
+  }
+  .quote-row-header{ background:#f3f4f6; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); font-weight:700; }
+  .quote-row{ border-top:1px solid var(--line); }
+  .quote-row-client{ font-weight:700; color:var(--ink); cursor:pointer; font-size:13.5px; }
+  .quote-row-title{ color:var(--ink-soft); cursor:pointer; font-size:12.5px; }
+  .quote-row-date, .quote-row-updated{ font-size:12px; color:var(--ink-soft); cursor:pointer; }
+  .quote-row-amt{ font-weight:700; color:var(--ink); cursor:pointer; font-size:12.5px; }
+  .quote-row-actions{ display:flex; gap:6px; }
+  .quote-row-actions button{ padding:5px 9px; font-size:11px; }
+  @media (max-width:760px){
+    /* Status stays visible on narrow screens — updating it on the phone is the whole point */
+    .quote-row-header, .quote-row{ grid-template-columns: 20px 1.3fr 1fr 0.8fr 104px auto; }
+    .quote-row-header .col-date, .quote-row .col-date,
+    .quote-row-header .col-updated, .quote-row .col-updated{ display:none; }
+  }
+
+  /* ---------- Status control (list page) ---------- */
+  .status-input{
+    font:inherit; font-size:11.5px; font-weight:700; line-height:1.3;
+    border:1px solid var(--line); border-radius:99px; background:#f3f4f6; color:var(--ink-soft);
+    padding:5px 10px; width:100%; max-width:130px; cursor:text;
+    text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .status-input::placeholder{ color:var(--ink-soft); font-weight:600; opacity:.7; }
+  /* At rest the box stays a small pill (ellipsised if the text is longer than that); while
+     editing it lifts out of the grid/card flow and grows to fit the whole sentence, so a long
+     typed update is never scrolled out of view mid-edit. Positioned relative to its own
+     wrapper (.quote-card-status / .status-cell below) so it overlays neighbouring controls
+     instead of pushing them around. */
+  .status-input:focus{
+    position:absolute; top:50%; left:0; transform:translateY(-50%);
+    z-index:30; width:auto; min-width:130px; max-width:min(340px, 92vw);
+    outline:2px solid var(--amber); outline-offset:1px; cursor:text; text-align:left;
+    overflow:visible; white-space:nowrap; background:#fff;
+    box-shadow:0 6px 18px rgba(0,0,0,.22);
+  }
+  .status-input.st-pending{ background:#fdf3e3; border-color:#e8cfa2; color:#8a6116; }
+  .status-input.st-followup{ background:#eaf1fb; border-color:#c3d5ee; color:#2f5a94; }
+  .status-input.st-completed{ background:#e9f5ec; border-color:#bcdcc5; color:#2f6b41; }
+  .status-input.st-approved{ background:#e9f5ec; border-color:#bcdcc5; color:#2f6b41; } /* legacy value from before the "Completed" rename — same styling, still recognised so old quotations keep their colour */
+  .status-input.st-rejected{ background:#fdefed; border-color:#e8c8c3; color:#95392e; }
+  .status-input.st-cancelled{ background:#f0f0f1; border-color:#d8d9db; color:#6b6f75; } /* legacy value, dropped from the suggestion list but still colour-coded if an old quotation has it stored */
+  .status-input.st-stillcomparing{ background:#f2eefc; border-color:#d9c9f0; color:#6a3fa0; }
+  .status-input.st-noresponseafterquote{ background:#f4efe8; border-color:#e0d2c0; color:#8a6b4a; }
+  .status-input.st-saving{ opacity:.55; }
+  .quote-card-status{ margin-top:8px; position:relative; }
+  .quote-card-status .status-input{ max-width:none; }
+  .quote-card-status .status-input:focus{ max-width:min(340px, 92vw); }
+  .status-cell{ position:relative; display:flex; align-items:center; }
+  .toolbar-group{ display:flex; gap:6px; }
+
+  /* ---------- Paper ---------- */
+  .paper-wrap{ display:flex; justify-content:center; padding:34px 16px; }
+  .paper{
+    width:100%; max-width:980px;
+    background:var(--paper);
+    box-shadow:0 20px 60px rgba(0,0,0,.45);
+    padding:44px 46px 36px;
+  }
+  .doc-header{ display:flex; gap:20px; border-bottom:3px solid var(--ink); padding-bottom:16px; }
+  .logo-box{
+    width:92px; height:92px; flex:0 0 auto;
+    border:1.5px dashed var(--line);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; overflow:hidden; border-radius:var(--radius);
+    background:#fafafa;
+  }
+  .logo-box img{ width:100%; height:100%; object-fit:contain; }
+  .company-fields{ flex:1; min-width:0; }
+  .company-fields [contenteditable]{ outline:none; }
+  .company-name{
+    font-size:18px; font-weight:800; letter-spacing:.01em;
+    margin-bottom:3px;
+  }
+  .company-line{ font-size:12.5px; color:var(--ink-soft); line-height:1.55; }
+  .company-line.reg{ color:var(--ink); font-weight:600; }
+  [contenteditable]:hover{ background:var(--amber-tint); }
+  [contenteditable]:focus{ background:var(--amber-tint); box-shadow:0 0 0 1px var(--amber); }
+
+  .doc-title-bar{
+    text-align:center; font-weight:800; font-size:15px;
+    letter-spacing:.14em; text-transform:uppercase;
+    border:2px solid var(--ink); padding:8px; margin:22px 0 16px;
+  }
+
+  .meta-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+  .meta-block h4{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--ink-soft); margin:0 0 6px;
+  }
+  .meta-block .row{ font-size:13px; line-height:1.6; display:flex; align-items:center; gap:6px; flex-wrap:nowrap; white-space:nowrap; }
+  .meta-block .row .fieldlabel{ flex:0 0 auto; white-space:nowrap; }
+  .meta-block .row input{ min-width:0; flex:1 1 auto; }
+  .meta-block input[type=text], .meta-block input[type=date]{
+    border:none; border-bottom:1px solid transparent; font:inherit; font-size:13px;
+    padding:2px 3px; background:transparent;
+  }
+  .meta-block input:hover{ background:var(--amber-tint); }
+  .meta-block input:focus{ outline:none; background:var(--amber-tint); border-bottom:1px solid var(--amber); }
+  .refresh-docno{
+    flex:0 0 auto; background:#eef0f2; color:var(--ink-soft); font-size:11px; padding:4px 7px;
+  }
+  .refresh-docno:hover{ background:var(--amber-tint); color:var(--amber-dark); }
+
+  .intro-line{ font-size:13px; margin:6px 0 18px; color:var(--ink-soft); }
+
+  /* ---------- Internal tracking strip (screen only, never printed) ---------- */
+  .tracking-strip{
+    display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px;
+    border:1px dashed var(--line); border-radius:var(--radius);
+    background:#fafbfc; padding:10px 12px; margin:0 0 16px;
+  }
+  .tracking-strip .tracking-title{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+    font-weight:700; color:var(--ink-soft); width:100%;
+  }
+  .tracking-strip label{
+    display:flex; flex-direction:column; gap:3px;
+    font-size:11px; color:var(--ink-soft); font-weight:700;
+  }
+  .tracking-strip input{
+    font:inherit; font-size:12.5px; font-weight:400; color:var(--ink);
+    border:1px solid var(--line); border-radius:2px; background:#fff;
+    padding:5px 7px; min-width:150px;
+  }
+  .tracking-strip input:focus{ outline:none; border-color:var(--amber); background:var(--amber-tint); }
+  @media (max-width:640px){
+    .tracking-strip label{ flex:1 1 100%; }
+    .tracking-strip input{ width:100%; }
+  }
+
+  /* ---------- Items sheet (CSS grid, horizontally scrollable, always one row per item) ---------- */
+  .sheet-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .sheet-wrap{
+    --photo-fr: 60fr;
+    --desc-fr: 40fr;
+    --qty-px: 120px;
+    --price-px: 110px;
+    --total-px: 130px;
+    border:2px solid var(--ink);
+    box-sizing:border-box;
+    min-width:640px;
+  }
+  .items-grid-header, .items-grid{
+    display:grid;
+    grid-template-columns:
+      var(--photo-fr)
+      var(--desc-fr)
+      var(--qty-px)
+      var(--price-px)
+      var(--total-px);
+  }
+  .items-grid-header{ background:var(--ink); }
+  .head-cell{
+    position:relative;
+    color:#fff; font-size:10.5px; text-transform:uppercase;
+    letter-spacing:.05em; padding:8px 8px; font-weight:700;
+  }
+  .head-cell.num{ text-align:right; }
+  .col-resize-handle{
+    display:none;
+    position:absolute; top:0; right:-5px; width:10px; height:100%; z-index:8;
+    cursor:col-resize; touch-action:none;
+  }
+  .col-resize-handle::after{
+    content:''; position:absolute; top:0; bottom:0; left:4px; width:2px; background:var(--amber);
+  }
+  body.manual-mode .col-resize-handle{ display:block; }
+
+  .cell{ border-top:1px solid var(--line); padding:12px 8px; vertical-align:top; overflow:hidden; position:relative; }
+  .cell.qty-cell, .cell.price-cell, .cell.total-cell{ text-align:right; }
+  .calc-note-input{
+    display:block; width:100%; text-align:right; margin-top:6px;
+    font-size:11px; font-style:italic; color:var(--ink-soft); font-family:inherit;
+    border:1px dashed var(--line); border-radius:2px; background:#fafafa;
+    padding:3px 5px; white-space:pre-wrap; word-break:break-word;
+    box-sizing:border-box; line-height:1.4; outline:none;
+  }
+  .calc-note-input:empty:before{ content:attr(data-placeholder); color:#c2c6cb; font-style:italic; }
+  .calc-note-input:hover{ background:var(--amber-tint); border-color:var(--amber); }
+  .calc-note-input:focus{ background:var(--amber-tint); border-color:var(--amber); }
+  .cell.total-cell{ font-weight:700; }
+
+  .desc-grid{ display:flex; flex-direction:column; gap:14px; }
+  .desc-block{ position:relative; border:1px solid var(--line); border-radius:var(--radius); padding-bottom:8px; }
+  .desc-toolbar{
+    display:flex; align-items:center; gap:3px; flex-wrap:wrap;
+    padding:4px 5px; border-bottom:1px solid var(--line); background:#f7f7f8;
+  }
+  .desc-toolbar button{
+    padding:3px 7px; font-size:11.5px; font-weight:700; background:#fff; color:var(--ink);
+    border:1px solid var(--line); border-radius:2px; line-height:1.5;
+  }
+  .desc-toolbar button:hover{ background:var(--amber-tint); border-color:var(--amber); }
+  .desc-toolbar button.u{ text-decoration:underline; }
+  .desc-toolbar button.i{ font-style:italic; }
+  .desc-toolbar select{
+    font-size:11px; padding:2px 3px; border:1px solid var(--line); border-radius:2px; background:#fff; color:var(--ink);
+  }
+  .desc-toolbar .rm-desc{
+    margin-left:auto; background:transparent; border:none; color:#b7bbc0; font-size:15px; font-weight:400; padding:2px 6px;
+  }
+  .desc-toolbar .rm-desc:hover{ color:var(--danger); }
+
+  .desc-box[contenteditable]{
+    min-height:420px; font-size:13.5px; line-height:1.55; outline:none;
+    white-space:pre-wrap; word-break:break-word; padding:10px 10px 4px;
+  }
+  .desc-box[contenteditable]:empty:before{
+    content:attr(data-placeholder); color:#a9adb2;
+  }
+
+  .desc-resize-handle{
+    position:absolute; right:2px; bottom:0; width:18px; height:18px; z-index:7;
+    cursor:ns-resize; background:linear-gradient(135deg, transparent 50%, var(--amber) 50%);
+    border-bottom-right-radius:2px; touch-action:none;
+  }
+  .add-desc-btn{
+    font-size:12px; padding:8px 12px; background:#eef0f2; color:var(--ink); margin-top:6px;
+  }
+  .add-desc-btn:hover{ background:#e2e5e8; }
+
+  .cell-input{
+    display:block; text-align:right; border:none; font:inherit; font-family:inherit; font-size:13px;
+    padding:3px 2px; background:transparent; width:100%; min-width:2.5em;
+    white-space:pre-wrap; word-break:break-word;
+    box-sizing:border-box; line-height:1.4; outline:none;
+  }
+  .cell-input:hover{ background:var(--amber-tint); }
+  .cell-input:focus{ background:var(--amber-tint); }
+  .qty-cell .cell-input, .price-cell .cell-input{
+    border:1px solid var(--line) !important; border-radius:2px; background:#fafafa;
+    padding:4px 6px;
+  }
+  .qty-cell .cell-input:hover, .price-cell .cell-input:hover{ background:var(--amber-tint); border-color:var(--amber); }
+  .qty-cell .cell-input:focus, .price-cell .cell-input:focus{ background:var(--amber-tint); border-color:var(--amber); }
+
+  .photo-grid{ display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  .photo-thumb{
+    position:relative; border-radius:var(--radius);
+    border:1px solid var(--line); background:#ffffff; flex:0 0 auto;
+    width:420px; height:420px; max-width:100%;
+  }
+  .photo-inner{ position:relative; width:100%; height:100%; overflow:hidden; border-radius:var(--radius); background:#fbfbfb; }
+  .photo-inner img{
+    position:absolute; top:50%; left:50%; width:100%; height:100%;
+    object-fit:contain; cursor:grab; user-select:none; -webkit-user-drag:none;
+    touch-action:none;
+  }
+  .photo-inner img:active{ cursor:grabbing; }
+  .photo-thumb .rm-photo{
+    position:absolute; top:3px; right:3px; width:26px; height:26px; border-radius:50%;
+    background:rgba(20,20,20,.75); color:#fff; font-size:15px; line-height:26px; text-align:center;
+    padding:0; z-index:5;
+  }
+  .photo-thumb .annot-badge{
+    position:absolute; top:3px; left:3px; background:var(--amber); color:#1a1a1a;
+    font-size:9px; font-weight:800; padding:2px 5px; border-radius:2px; z-index:5;
+  }
+  .photo-bottom-bar{
+    position:absolute; left:3px; right:26px; bottom:3px; z-index:5;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:4px; flex-wrap:wrap;
+  }
+  .photo-thumb .draw-btn{
+    font-size:11.5px; padding:6px 9px; flex:0 0 auto;
+    background:rgba(20,20,20,.75); color:#fff; border-radius:3px;
+  }
+  .photo-thumb .draw-btn:hover{ background:rgba(224,138,44,.9); color:#1a1a1a; }
+  .zoom-overlay{
+    background:rgba(20,20,20,.75); border-radius:3px; padding:3px 4px;
+    display:flex; align-items:center; gap:3px; flex:0 0 auto;
+  }
+  .zoom-overlay input[type=range]{ width:56px; height:22px; }
+  .zoom-btn{
+    width:24px; height:24px; flex:0 0 auto; padding:0; font-size:16px; font-weight:700;
+    background:rgba(255,255,255,.15); color:#fff; border-radius:3px; line-height:1;
+  }
+  .zoom-btn:hover{ background:var(--amber); color:#1a1a1a; }
+  .zoom-btn:active{ background:var(--amber-dark); }
+  .resize-handle{
+    position:absolute; right:0; bottom:0; width:20px; height:20px; z-index:6;
+    cursor:nwse-resize; background:linear-gradient(135deg, transparent 50%, var(--amber) 50%);
+    border-bottom-right-radius:2px; touch-action:none;
+  }
+  .add-photo-btn{
+    font-size:12px; padding:8px 12px; background:#eef0f2; color:var(--ink);
+  }
+  .add-photo-btn:hover{ background:#e2e5e8; }
+
+  .row-remove{
+    background:transparent; color:#b7bbc0; font-size:16px; padding:4px 6px; font-weight:400;
+  }
+  .row-remove:hover{ color:var(--danger); }
+  .item-actions{ display:flex; justify-content:flex-end; align-items:center; gap:2px; }
+
+  /* ---------- Line reordering (drag a whole line up/down) ---------- */
+  .row-drag-handle{
+    display:inline-flex; align-items:center; gap:4px;
+    margin-bottom:8px; padding:3px 7px;
+    border:1px solid var(--line); border-radius:3px; background:#f7f7f8;
+    color:var(--ink-soft); font-size:11px; font-weight:700; line-height:1.4;
+    cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+  }
+  .row-drag-handle:hover{ background:var(--amber-tint); border-color:var(--amber); color:var(--amber-dark); }
+  .row-drag-handle.dragging{ cursor:grabbing; background:var(--amber-tint); border-color:var(--amber); color:var(--amber-dark); }
+  /* Photo / Description columns are wide enough for the word; Qty / Price / Total show the grip only */
+  .qty-cell .row-drag-handle .drag-label,
+  .price-cell .row-drag-handle .drag-label,
+  .total-cell .row-drag-handle .drag-label{ display:none; }
+  body.row-dragging{ user-select:none; -webkit-user-select:none; }
+  body.row-dragging .cell-input, body.row-dragging .desc-box{ cursor:grabbing; }
+  .cell.row-drag-src{ opacity:.45; }
+  .cell.drop-before{ box-shadow: inset 0 3px 0 0 var(--amber); }
+  .cell.drop-after{ box-shadow: inset 0 -3px 0 0 var(--amber); }
+  .row-move-btn{
+    background:transparent; color:#b7bbc0; font-size:14px; padding:4px 6px; font-weight:400;
+  }
+  .row-move-btn:hover:not(:disabled){ color:var(--amber-dark); }
+  .row-move-btn:disabled{ opacity:.3; cursor:default; }
+
+  .add-item-row{ text-align:center; padding:14px; }
+  .add-item-btn{ background:transparent; border:1.5px dashed var(--line); color:var(--ink-soft); width:100%; padding:12px; }
+  .add-item-btn:hover{ border-color:var(--amber); color:var(--amber-dark); background:var(--amber-tint); }
+
+  /* ---------- Totals ---------- */
+  .totals-wrap{ margin-top:0; }
+  .totals-table{ width:100%; border-collapse:collapse; }
+  .totals-table td{ padding:9px 10px; font-size:13.5px; border-top:1px solid var(--line); }
+  .totals-table tr.grand td{ border-top:2px solid var(--ink); font-weight:800; font-size:14.5px; }
+  .totals-table td.label{ text-align:right; color:var(--ink-soft); }
+  .totals-table tr.grand td.label{ color:var(--ink); }
+  .totals-table td.value{ text-align:right; width:150px; }
+  .currency-select{ font:inherit; font-size:13px; border:1px solid var(--line); border-radius:var(--radius); padding:5px 6px; background:#fff; }
+
+  /* ---------- Terms ---------- */
+  .terms-section{ margin-top:22px; font-size:12.5px; color:var(--ink-soft); line-height:1.7; }
+  .terms-section h4{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft);
+    margin:16px 0 6px;
+  }
+  .terms-section [contenteditable]{ color:var(--ink); }
+  .bank-block{ font-weight:700; color:var(--ink); margin-top:4px; }
+
+  .footer-hint{
+    text-align:center; color:#8a9099; font-size:11.5px; margin-top:14px;
+  }
+
+  /* ---------- Modal: annotator ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,12,15,.85); z-index:100;
+    display:none; align-items:center; justify-content:center; padding:12px;
+  }
+  .modal-overlay.open{ display:flex; }
+  .annot-modal{
+    background:#1b1e23; border-radius:6px; width:100%; max-width:980px;
+    max-height:96vh; display:flex; flex-direction:column; overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+  }
+  .annot-head{
+    display:flex; align-items:center; gap:10px; padding:12px 16px;
+    border-bottom:1px solid #2e333a; color:#f4f1ea; font-size:13px; font-weight:700;
+  }
+  .annot-head .tick{ width:9px;height:9px;background:var(--amber); transform:rotate(45deg); }
+  .annot-head .hint{ margin-left:auto; font-weight:400; color:#8a9099; font-size:11.5px; }
+  .annot-body{ flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; background:#111317; padding:10px; min-height:0; }
+  .annot-body canvas{ touch-action:none; max-width:100%; max-height:60vh; cursor:crosshair; background:#000; }
+  .annot-toolbar{
+    display:flex; align-items:center; gap:12px; padding:10px 14px;
+    border-top:1px solid #2e333a; flex-wrap:wrap; row-gap:10px;
+  }
+  .mode-toggle{ display:flex; gap:6px; }
+  .mode-btn{ background:#2b3038; color:#c7cbd1; padding:8px 11px; font-size:12px; }
+  .mode-btn.selected{ background:var(--amber); color:#1a1a1a; }
+  .swatches{ display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+  .swatch{
+    width:26px; height:26px; border-radius:50%; border:2px solid rgba(255,255,255,.25);
+    padding:0; cursor:pointer;
+  }
+  .swatch.selected{ border-color:#fff; box-shadow:0 0 0 2px var(--amber); }
+  .spectrum-swatch{
+    position:relative; overflow:hidden;
+    background:conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  }
+  .spectrum-swatch input[type=color]{
+    position:absolute; inset:-6px; opacity:0; cursor:pointer; border:none; padding:0; width:200%; height:200%;
+  }
+  .width-row{ display:flex; align-items:center; gap:8px; color:#c7cbd1; font-size:12px; }
+  .width-row input[type=range]{ width:90px; height:18px; }
+  .annot-toolbar .spacer{ flex:1; }
+  .icon-btn{ background:#2b3038; color:#e7e5df; padding:9px 12px; font-size:12px; }
+  .icon-btn:hover{ background:#383f49; }
+  .icon-btn:disabled{ opacity:.35; cursor:default; }
+  .icon-btn:disabled:hover{ background:#2b3038; }
+
+  .text-panel{
+    display:none; width:100%; gap:10px; align-items:flex-start; flex-wrap:wrap;
+    padding:10px 14px; border-top:1px solid #2e333a; background:#20242b;
+  }
+  .text-panel.open{ display:flex; }
+  .text-panel textarea{
+    flex:1 1 220px; min-width:180px; min-height:56px; resize:vertical;
+    background:#111317; color:#f4f1ea; border:1px solid #3a4048; border-radius:4px;
+    padding:8px 10px; font:inherit; font-size:14px;
+  }
+  .text-panel .text-controls{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 720px){
+    .paper{ padding:22px 16px 26px; }
+    .doc-header{ flex-direction:column; align-items:flex-start; gap:12px; }
+    .meta-grid{ grid-template-columns:1fr; gap:14px; }
+    input, textarea, select, [contenteditable]{ font-size:16px !important; }
+    .company-line, .meta-block .row{ font-size:14px; }
+    .col-resize-handle{ width:28px; right:-14px; }
+    .resize-handle{ width:34px; height:34px; }
+    .desc-resize-handle{ width:34px; height:34px; }
+    .photo-bottom-bar{ right:38px; }
+    .annot-toolbar{ justify-content:center; }
+    .toolbar{ gap:6px; }
+    .toolbar button{ padding:8px 10px; font-size:12px; }
+  }
+
+  /* ---------- No-print / print ---------- */
+  @media print{
+    .no-print{ display:none !important; }
+    body{ background:#fff !important; padding:0; }
+    .paper-wrap{ padding:0; }
+    .paper{ box-shadow:none; max-width:none; width:198mm; padding:5mm 6mm; }
+    .sheet-scroll{ overflow:visible; }
+    .sheet-wrap{
+      min-width:186mm !important;
+      --qty-px: 55px !important;
+      --price-px: 72px !important;
+      --total-px: 92px !important;
+    }
+    [contenteditable]:hover, [contenteditable]:focus{ background:transparent !important; box-shadow:none !important; }
+    .cell-input:hover, .cell-input:focus{ background:transparent !important; }
+    .qty-cell .cell-input, .price-cell .cell-input{ border:none !important; background:transparent !important; padding:3px 2px !important; }
+    .photo-thumb .rm-photo, .photo-thumb .photo-bottom-bar, .resize-handle{ display:none; }
+    .add-photo-btn{ display:none; }
+    .col-resize-handle, .desc-resize-handle{ display:none !important; }
+    .calc-note-input{ display:none !important; }
+    @page{ size:A4 portrait; margin:6mm; }
+  }
+
+</style>
+</head>
+<body class="view-list">
+
+  <div class="toolbar no-print">
+    <div class="brandmark"><span class="tick"></span> QUOTE/INVOICE BUILDER</div>
+    <span class="autosave-note editor-only" id="autosaveNote"></span>
+    <button class="btn-ghost editor-only" id="backToListBtn">← Back to list</button>
+    <div class="toolbar-group editor-only">
+      <button class="btn-ghost" id="undoInvoiceBtn" title="Undo (Ctrl+Z)" disabled>↺ Undo</button>
+      <button class="btn-ghost" id="redoInvoiceBtn" title="Redo (Ctrl+Shift+Z)" disabled>↻ Redo</button>
+    </div>
+    <button class="btn-manual editor-only" id="manualModeBtn">🛠 Manual layout</button>
+    <button class="btn-ghost editor-only" id="resetLayoutBtn" title="Reset column widths back to default">↺ Reset layout</button>
+    <button class="btn-danger editor-only" id="deleteDocBtn">Delete quotation</button>
+    <button class="btn-manual editor-only" id="convertInvoiceBtn" title="Turn this quotation into an invoice">🧾 Convert to Invoice</button>
+    <button class="btn-ghost editor-only" id="exportExcelBtn" title="Downloads an .xlsx with the quotation details (needs internet the first time, to load the export library)">Export Excel</button>
+    <button class="btn-primary editor-only" id="printBtn" title="Opens your browser's print dialog — choose Save as PDF as the destination">Save as PDF</button>
+    <button class="btn-primary list-only" id="newQuotationBtn">+ New Quotation</button>
+  </div>
+
+  <div class="list-wrap list-only" id="listView">
+    <div class="list-header">
+      <div class="list-header-row">
+        <h1 id="listTitle">My Quotations</h1>
+        <div class="list-header-actions">
+          <button class="btn-ghost" id="exportTrackerBtn" title="Download every quotation as one tracking sheet (No / Client / Address / Quotation No / Inspection / Send date / Result)">📋 Export tracker</button>
+          <button class="btn-ghost" id="exportBackupBtn" title="Download all your quotations as one backup file">⇩ Backup</button>
+          <button class="btn-ghost" id="importBackupBtnTrigger" title="Restore quotations from a backup file">⇧ Restore</button>
+          <input type="file" id="importBackupInput" accept="application/json" style="display:none">
+          <button class="btn-ghost" id="trashToggleBtn">🗑 Trash</button>
+        </div>
+      </div>
+      <p class="list-sub" id="listSub">Saved automatically in this browser as you type. Nothing here is shared unless you send the file or the link.</p>
+      <div class="list-toolbar-row">
+        <div class="view-toggle">
+          <button class="view-btn" id="gridViewBtn" title="Grid view">⊞ Grid</button>
+          <button class="view-btn" id="listViewModeBtn" title="List view">☰ List</button>
+        </div>
+        <div class="sort-controls">
+          <label for="sortFieldSelect">Sort by</label>
+          <select id="sortFieldSelect">
+            <option value="updatedAt">Last updated</option>
+            <option value="client">Customer name</option>
+            <option value="date">Quote date</option>
+            <option value="docNo">Quote/Invoice number</option>
+          </select>
+          <button class="btn-ghost" id="sortDirBtn" title="Toggle ascending/descending">↓ Desc</button>
+        </div>
+        <div class="trash-bulk-actions" id="trashBulkActions" style="display:none">
+          <button class="btn-ghost" id="selectAllTrashBtn">Select all</button>
+          <button class="btn-ghost" id="restoreSelectedBtn">Restore selected</button>
+          <button class="btn-danger" id="deleteSelectedTrashBtn">Delete selected</button>
+          <button class="btn-danger" id="emptyTrashBtn">Empty trash</button>
+        </div>
+      </div>
+    </div>
+    <div class="list-empty" id="listEmpty" style="display:none">No quotations yet — click "+ New Quotation" above to start your first one.</div>
+    <div class="quote-list" id="quoteList"></div>
+  </div>
+
+  <div class="paper-wrap editor-only" id="editorView">
+    <div class="paper" id="paper">
+
+      <!-- Header -->
+      <div class="doc-header">
+        <div class="logo-box" id="logoBox" title="Click to upload logo">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0CAIAAABEtEjdAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAFUWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4KPHg6eG1wbWV0YSB4bWxuczp4PSdhZG9iZTpuczptZXRhLyc+CjxyZGY6UkRGIHhtbG5zOnJkZj0naHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyc+CgogPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9JycKICB4bWxuczpBdHRyaWI9J2h0dHA6Ly9ucy5hdHRyaWJ1dGlvbi5jb20vYWRzLzEuMC8nPgogIDxBdHRyaWI6QWRzPgogICA8cmRmOlNlcT4KICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0nUmVzb3VyY2UnPgogICAgIDxBdHRyaWI6Q3JlYXRlZD4yMDI2LTA3LTA2PC9BdHRyaWI6Q3JlYXRlZD4KICAgICA8QXR0cmliOkRhdGE+eyZxdW90O2RvYyZxdW90OzomcXVvdDtEQUdKUzFLdUxBNCZxdW90OywmcXVvdDt1c2VyJnF1b3Q7OiZxdW90O1VBRFc0dHZIalM0JnF1b3Q7LCZxdW90O2JyYW5kJnF1b3Q7OiZxdW90O1NvbyBIb3UmIzM5O3MgVGVhbSZxdW90O308L0F0dHJpYjpEYXRhPgogICAgIDxBdHRyaWI6RXh0SWQ+OWFmZTJhMmUtNTNiMy00MTI3LThjMTYtY2M5MWU5ZmY3ZmZjPC9BdHRyaWI6RXh0SWQ+CiAgICAgPEF0dHJpYjpGYklkPjUyNTI2NTkxNDE3OTU4MDwvQXR0cmliOkZiSWQ+CiAgICAgPEF0dHJpYjpUb3VjaFR5cGU+MjwvQXR0cmliOlRvdWNoVHlwZT4KICAgIDwvcmRmOmxpPgogICA8L3JkZjpTZXE+CiAgPC9BdHRyaWI6QWRzPgogPC9yZGY6RGVzY3JpcHRpb24+CgogPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9JycKICB4bWxuczpkYz0naHR0cDovL3B1cmwub3JnL2RjL2VsZW1l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" alt="Company logo">
+        </div>
+        <input type="file" id="logoInput" accept="image/*" style="display:none">
+        <div class="company-fields">
+          <div class="company-name" id="companyName" contenteditable="true">RENOHAUS SOLUTIONS (M) SDN BHD</div>
+          <div class="company-line reg" id="companyReg" contenteditable="true">202501000023 (1601438-X)</div>
+          <div class="company-line" id="companyAddr1" contenteditable="true">NO.3 -23-3A, PLAZA BUKIT JALIL (REVO)</div>
+          <div class="company-line" id="companyAddr2" contenteditable="true">NO 1, PERSIARAN JALIL 1, BANDAR BUKIT JALIL, 57000 KUALA LUMPUR</div>
+          <div class="company-line" id="companyContact" contenteditable="true">Tel: 6014-7655889 &nbsp; Email: renokakinco@gmail.com</div>
+        </div>
+      </div>
+
+      <div class="doc-title-bar" id="docTitle" contenteditable="true">Quotation</div>
+
+      <div class="meta-grid">
+        <div class="meta-block">
+          <h4>Billing Address</h4>
+          <div class="row" id="billName" contenteditable="true" style="white-space:normal">Client Name</div>
+          <div class="row" id="billAddr" contenteditable="true" style="white-space:normal">Client Address, Postcode, City</div>
+          <div class="row" id="billPhone" contenteditable="true" style="white-space:normal">012-000 0000</div>
+        </div>
+        <div class="meta-block">
+          <h4>Document Details</h4>
+          <div class="row"><span class="fieldlabel">Doc No:</span><input type="text" id="docNo" value=""><button class="refresh-docno no-print" id="refreshDocNo" title="Get next running number">↻</button></div>
+          <div class="row"><span class="fieldlabel">Date:</span><input type="date" id="docDate"></div>
+        </div>
+      </div>
+
+      <div class="tracking-strip no-print" id="trackingStrip">
+        <span class="tracking-title">Internal tracking — never printed, used by the tracker export</span>
+        <label>Inspection date<input type="date" id="trackInspectDate"></label>
+        <label>Inspection by<input type="text" id="trackInspectBy" placeholder="Who inspected"></label>
+        <label>Quotation send date<input type="date" id="trackSendDate"></label>
+        <label>Result<input type="text" id="trackResult" list="trackResultOptions" placeholder="Pending"></label>
+        <datalist id="trackResultOptions">
+          <option value="Pending"></option>
+          <option value="Follow up"></option>
+          <option value="Still comparing"></option>
+          <option value="No response after quote"></option>
+          <option value="Completed"></option>
+          <option value="Rejected"></option>
+        </datalist>
+      </div>
+
+      <div class="intro-line" id="introLine" contenteditable="true">Thank you for your inquiry. We are pleased to submit our quote as follows:</div>
+
+      <div class="sheet-scroll">
+        <div class="sheet-wrap" id="sheetWrap">
+          <div class="items-grid-header">
+            <div class="head-cell">Photo<div class="col-resize-handle" data-col="photo"></div></div>
+            <div class="head-cell">Description<div class="col-resize-handle" data-col="desc"></div></div>
+            <div class="head-cell num">Qty<div class="col-resize-handle" data-col="qty"></div></div>
+            <div class="head-cell num">Price<div class="col-resize-handle" data-col="price"></div></div>
+            <div class="head-cell num">Total</div>
+          </div>
+          <div class="items-grid" id="itemsGrid"></div>
+        </div>
+      </div>
+      <div class="add-item-row no-print">
+        <button class="add-item-btn" id="addItemBtn">+ Add line item</button>
+      </div>
+
+      <div class="totals-wrap">
+        <table class="totals-table">
+          <tr>
+            <td class="label">Currency</td>
+            <td class="value">
+              <select class="currency-select no-print" id="currencySelect">
+                <option value="RM">RM (MYR)</option>
+                <option value="$">$ (USD)</option>
+                <option value="S$">S$ (SGD)</option>
+                <option value="">No symbol</option>
+              </select>
+            </td>
+          </tr>
+          <tr class="grand">
+            <td class="label">Total Amount Due</td>
+            <td class="value" id="grandTotal">RM 0.00</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="terms-section">
+        <h4>Payment Terms</h4>
+        <div id="termsPayment" contenteditable="true">CASH TERM. Deposit is 50% of the total amount. Remaining 50% payable upon completion of the work (subject to progressive payment for larger projects).</div>
+
+        <h4>Lead Time</h4>
+        <div id="termsLead" contenteditable="true">3–5 working days upon receipt of Official Purchase Order, subject to material availability.</div>
+
+        <h4>Notes</h4>
+        <div id="termsNotes" contenteditable="true">We hope that our quotation is favourable to you and look forward to receiving your valued order. If you require further clarification, please do not hesitate to contact us. The Company reserves the right to revise this quotation at any time.</div>
+
+        <h4>Payment To</h4>
+        <div id="termsPaymentToName" contenteditable="true">RENOHAUS SOLUTIONS (M) SDN BHD</div>
+        <div class="bank-block" id="termsBank" contenteditable="true">CIMB Bank Berhad — 86-0608450-7</div>
+      </div>
+
+      <div class="footer-hint no-print">Click any text to edit it, including the "Quotation" title. Each description box has its own B / I / U / font-size toolbar, its own resize handle, and "+ Add description box" to stack another one. Qty / Price / Total accept any text, and blank is fine. Drag a photo to pan, corner handle to resize, slider to zoom, pencil to draw, arrow tool to point things out (drag its tip to resize and rotate), "Aa" to add text. Drag the "⇅ Move line" grip at the top of any cell (or use the ↑ / ↓ buttons) to reorder a whole line — photo, description, qty, price and total move together. Toggle "Manual layout" to drag column widths. Undo / Redo (top bar, or Ctrl+Z / Ctrl+Shift+Z) cover the whole quotation.</div>
+    </div>
+  </div>
+
+  <!-- Annotation Modal -->
+  <div class="modal-overlay no-print" id="modalOverlay">
+    <div class="annot-modal">
+      <div class="annot-head">
+        <span class="tick"></span> Mark up photo
+        <span class="hint">Straight line: drag A to B &nbsp;·&nbsp; Text: tap "+ Add text"</span>
+      </div>
+      <div class="annot-body">
+        <canvas id="annotCanvas"></canvas>
+      </div>
+      <div class="annot-toolbar">
+        <div class="mode-toggle">
+          <button class="mode-btn selected" id="freehandModeBtn">✎ Freehand</button>
+          <button class="mode-btn" id="lineModeBtn">📏 Straight line</button>
+          <button class="mode-btn" id="arrowModeBtn">➤ Arrow</button>
+          <button class="mode-btn" id="textModeBtn">Aa Text</button>
+        </div>
+        <div class="swatches" id="swatches"></div>
+        <div class="width-row" id="lineWidthRow">
+          <span>Line</span>
+          <input type="range" id="widthRange" min="2" max="40" value="6">
+        </div>
+        <button class="btn-primary" id="placeArrowBtn" style="display:none">+ Add arrow</button>
+        <button class="icon-btn" id="undoBtn">↺ Undo</button>
+        <button class="icon-btn" id="redoBtn">↻ Redo</button>
+        <button class="icon-btn" id="clearBtn">Clear all</button>
+        <button class="icon-btn" id="deleteSelectedBtn" style="display:none">Delete selected</button>
+        <div class="spacer"></div>
+        <button class="icon-btn" id="cancelAnnotBtn">Cancel</button>
+        <button class="btn-primary" id="saveAnnotBtn">Save markup</button>
+      </div>
+      <div class="text-panel" id="textPanel">
+        <textarea id="textInput" placeholder="Type your text…"></textarea>
+        <div class="text-controls">
+          <button class="icon-btn" id="styleCycleBtn">Style: Solid box</button>
+          <div class="width-row">
+            <span>Size</span>
+            <input type="range" id="fontSizeRange" min="16" max="96" value="36">
+          </div>
+          <button class="btn-primary" id="placeTextBtn">+ Add text</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // window.storage only exists when this file is running inside Claude.ai's artifact
+  // viewer (preview/testing environment) — not the real Netlify deployment.
+  const hasWindowStorage = (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function');
+
+  // No login/access-gate — this file saves locally (window.storage inside the Claude.ai
+  // preview, IndexedDB/localStorage everywhere else). currentUserEmail() is kept as a
+  // harmless stub since a couple of "createdBy" fields elsewhere still reference it.
+  function currentUserEmail(){ return ''; }
+
+  // ---------------- Storage adapter ----------------
+  // Two tiers, chosen once at startup:
+  //   1. window.storage            — running inside Claude.ai's artifact viewer (preview only).
+  //   2. IndexedDB / localStorage  — the real Netlify deployment: same-device storage, each
+  //                                  browser keeps its own local copy (no cross-device sync).
+  let storageMode = hasWindowStorage ? 'cloud' : 'local';
+  const LS_PREFIX = 'qb__';
+
+  // ---- Tier 3: IndexedDB-backed fallback for standalone use before cloud is set up ----
+  // Previously this fell back to localStorage, which caps out around 5-10MB *total* per browser
+  // origin — shared across every quotation ever saved, not just the current one — and throws
+  // QuotaExceededError once that's used up. savePhotoBlob() caught that error and only logged it
+  // to the console, so photos kept getting added in the editor (they're held in memory) but
+  // silently stopped actually persisting once the quota was hit — which is why they'd show up
+  // fine in the same session but render blank/black after a reload, once enough photos'
+  // base64 data had accumulated. IndexedDB's quota is tied to available disk space (commonly
+  // hundreds of MB to multiple GB, not a handful of MB), which removes that ceiling in practice.
+  // Existing localStorage data is migrated in automatically below so nothing already saved is lost.
+  const IDB_NAME = 'qbLocalStore', IDB_STORE = 'kv';
+  let idbOpenPromise = null;
+  function openIDB(){
+    if(idbOpenPromise) return idbOpenPromise;
+    idbOpenPromise = new Promise((resolve, reject) => {
+      if(typeof indexedDB === 'undefined'){ reject(new Error('IndexedDB unavailable')); return; }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if(!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return idbOpenPromise;
+  }
+  async function idbStore(mode){
+    const db = await openIDB();
+    return db.transaction(IDB_STORE, mode).objectStore(IDB_STORE);
+  }
+  const idbAdapter = {
+    async get(key){
+      const store = await idbStore('readonly');
+      const val = await new Promise((res, rej) => {
+        const r = store.get(key);
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      if(val === undefined){ const err = new Error('not found'); throw err; }
+      return { key, value: val, shared: false };
+    },
+    async set(key, value){
+      const store = await idbStore('readwrite');
+      await new Promise((res, rej) => {
+        const r = store.put(value, key);
+        r.onsuccess = () => res();
+        r.onerror = () => rej(r.error);
+      });
+      return { key, value, shared: false };
+    },
+    async delete(key){
+      const store = await idbStore('readwrite');
+      const existed = await new Promise((res, rej) => {
+        const r = store.get(key);
+        r.onsuccess = () => res(r.result !== undefined);
+        r.onerror = () => rej(r.error);
+      });
+      await new Promise((res, rej) => {
+        const r = store.delete(key);
+        r.onsuccess = () => res();
+        r.onerror = () => rej(r.error);
+      });
+      return { key, deleted: existed, shared: false };
+    },
+    async list(prefix){
+      const store = await idbStore('readonly');
+      const keys = await new Promise((res, rej) => {
+        const out = [];
+        const r = store.openCursor();
+        r.onsuccess = (e) => {
+          const cur = e.target.result;
+          if(cur){
+            if(!prefix || (typeof cur.key === 'string' && cur.key.indexOf(prefix) === 0)) out.push(cur.key);
+            cur.continue();
+          } else res(out);
+        };
+        r.onerror = () => rej(r.error);
+      });
+      return { keys, shared: false };
+    }
+  };
+  // Last-resort fallback if IndexedDB itself is unavailable (very old/restricted browsers).
+  const legacyLocalStorageAdapter = {
+    async get(key){
+      const val = localStorage.getItem(LS_PREFIX + key);
+      if(val === null){ const err = new Error('not found'); throw err; }
+      return { key, value: val, shared: false };
+    },
+    async set(key, value){
+      localStorage.setItem(LS_PREFIX + key, value);
+      return { key, value, shared: false };
+    },
+    async delete(key){
+      const existed = localStorage.getItem(LS_PREFIX + key) !== null;
+      localStorage.removeItem(LS_PREFIX + key);
+      return { key, deleted: existed, shared: false };
+    },
+    async list(prefix){
+      const keys = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(k && k.indexOf(LS_PREFIX) === 0){
+          const bare = k.slice(LS_PREFIX.length);
+          if(!prefix || bare.indexOf(prefix) === 0) keys.push(bare);
+        }
+      }
+      return { keys, shared: false };
+    }
+  };
+  // One-time copy of any pre-existing localStorage data into IndexedDB, so upgrading to this
+  // version doesn't strand quotations/photos that were already saved under the old scheme.
+  // Originals are left in place (harmless) rather than deleted, as a redundant safety net.
+  async function migrateLegacyLocalStorageIfNeeded(){
+    const FLAG = '__qb_idb_migrated_v1';
+    try{
+      if(localStorage.getItem(FLAG)) return;
+      const legacyKeys = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(k && k.indexOf(LS_PREFIX) === 0) legacyKeys.push(k);
+      }
+      for(const k of legacyKeys){
+        const bare = k.slice(LS_PREFIX.length);
+        const val = localStorage.getItem(k);
+        if(val !== null) await idbAdapter.set(bare, val);
+      }
+      localStorage.setItem(FLAG, '1');
+    }catch(e){
+      console.error('Legacy localStorage -> IndexedDB migration failed; will retry next load', e);
+    }
+  }
+  let localAdapter = null;
+  async function pickLocalAdapter(){
+    if(localAdapter) return localAdapter;
+    if(typeof indexedDB === 'undefined'){ localAdapter = legacyLocalStorageAdapter; return localAdapter; }
+    try{
+      await openIDB();
+      await migrateLegacyLocalStorageIfNeeded();
+      localAdapter = idbAdapter;
+    }catch(e){
+      console.error('IndexedDB failed to open; falling back to localStorage (much less storage space available)', e);
+      localAdapter = legacyLocalStorageAdapter;
+    }
+    return localAdapter;
+  }
+  const storageAdapter = hasWindowStorage ? window.storage : {
+    async get(key, shared){ const a = await pickLocalAdapter(); return a.get(key, shared); },
+    async set(key, value, shared){ const a = await pickLocalAdapter(); return a.set(key, value, shared); },
+    async delete(key, shared){ const a = await pickLocalAdapter(); return a.delete(key, shared); },
+    async list(prefix, shared){ const a = await pickLocalAdapter(); return a.list(prefix, shared); }
+    // No increment() here: neither local tier (IndexedDB/localStorage) implements one, and
+    // nextNumberedDoc()'s `if(storageAdapter.increment)` check relies on this method being
+    // truly absent (not present-but-returning-undefined) to correctly fall through to its
+    // get-then-set path, which is the right approach for single-device local storage anyway.
+  };
+
+  // ---------------- State ----------------
+  let items = [];
+  let saveTimer = null;
+
+
+  const MAX_DIM = 1400;
+  const DEFAULT_W = 420, DEFAULT_H = 420;
+  const MIN_W = 100, MIN_H = 100, MAX_W = 700, MAX_H = 700;
+  const DEFAULT_ROW_H = 420;
+  const DEFAULT_DESC_HTML = '<b>Roof waterproofing</b><br><br>Torch on membrane mineral grey<br>Heavy duty bituminous sheet 4.5kg/m\u00B2<br>To apply torch on membrane on concrete slab<br>on highlighted box<br><br><b>Method:</b><br>-To clean the slab surface<br>-To apply primer on the slab<br>-To apply torch on membrane<br>-To cover membrane up to 100mm wall upturn(if applicable)<br>-to use waterproofing liquid at areas<br>unreachable by membrane';
+
+  const sheetWrap = document.getElementById('sheetWrap');
+  let layout = { photoFr:60, descFr:40, qtyPx:120, pricePx:80, totalPx:130 };
+
+  // Internal tracking fields — screen-only, never printed, exported to the tracking sheet.
+  // Kept separate from FIELD_IDS because those are contenteditable divs read via innerText,
+  // while these are real <input> elements read via .value.
+  const TRACK_IDS = ['trackInspectDate','trackInspectBy','trackSendDate','trackResult'];
+
+  const FIELD_IDS = ['docTitle','companyName','companyReg','companyAddr1','companyAddr2','companyContact',
+                     'billName','billAddr','billPhone','introLine',
+                     'termsPayment','termsLead','termsNotes','termsPaymentToName','termsBank'];
+
+  function applyLayoutVars(){
+    sheetWrap.style.setProperty('--photo-fr', layout.photoFr + 'fr');
+    sheetWrap.style.setProperty('--desc-fr', layout.descFr + 'fr');
+    sheetWrap.style.setProperty('--qty-px', layout.qtyPx + 'px');
+    sheetWrap.style.setProperty('--price-px', layout.pricePx + 'px');
+    sheetWrap.style.setProperty('--total-px', layout.totalPx + 'px');
+  }
+  applyLayoutVars();
+
+  function uid(prefix){ return prefix + (Date.now().toString(36)) + Math.random().toString(36).slice(2,6); }
+
+  document.getElementById('docDate').valueAsDate = new Date();
+
+  function newDescBlock(html){
+    return { id: uid('db'), html: (html !== undefined ? html : ''), height: DEFAULT_ROW_H };
+  }
+  function newItem(){
+    return { id: uid('it'), descriptions: [ newDescBlock(DEFAULT_DESC_HTML) ], qty:'1', qtyCalc:'', price:'', total:'', totalManual:false, photos:[] };
+  }
+
+  // ================= Whole-invoice Undo / Redo =================
+  let undoStack = [];
+  let redoStack = [];
+  const MAX_HISTORY = 60;
+  let restoring = false; // guard so applyState() doesn't itself get captured as a history step
+
+  function snapshotNow(){
+    return JSON.stringify(serializeState());
+  }
+  function updateUndoRedoButtons(){
+    document.getElementById('undoInvoiceBtn').disabled = undoStack.length === 0;
+    document.getElementById('redoInvoiceBtn').disabled = redoStack.length === 0;
+  }
+  function commitHistory(beforeSnapshot){
+    if(restoring || beforeSnapshot === null || beforeSnapshot === undefined) return;
+    const after = snapshotNow();
+    if(after === beforeSnapshot) return;
+    undoStack.push(beforeSnapshot);
+    if(undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+    updateUndoRedoButtons();
+  }
+  async function doUndo(){
+    if(!undoStack.length) return;
+    const current = snapshotNow();
+    const prev = undoStack.pop();
+    redoStack.push(current);
+    restoring = true;
+    await applyState(JSON.parse(prev));
+    restoring = false;
+    updateUndoRedoButtons();
+    updateConvertButtonUI();
+    scheduleSave();
+  }
+  async function doRedo(){
+    if(!redoStack.length) return;
+    const current = snapshotNow();
+    const next = redoStack.pop();
+    undoStack.push(current);
+    restoring = true;
+    await applyState(JSON.parse(next));
+    restoring = false;
+    updateUndoRedoButtons();
+    updateConvertButtonUI();
+    scheduleSave();
+  }
+  document.getElementById('undoInvoiceBtn').addEventListener('click', doUndo);
+  document.getElementById('redoInvoiceBtn').addEventListener('click', doRedo);
+  document.addEventListener('keydown', (e) => {
+    if(!document.body.classList.contains('view-editor')) return;
+    if(document.getElementById('modalOverlay').classList.contains('open')) return; // annotator has its own undo/redo
+    const mod = e.ctrlKey || e.metaKey;
+    if(!mod) return;
+    if(e.key.toLowerCase() === 'z' && !e.shiftKey){ e.preventDefault(); doUndo(); }
+    else if((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y'){ e.preventDefault(); doRedo(); }
+  });
+
+  // Wires focus->snapshot / blur->commit onto an element so text edits become one undo step
+  function wireHistoryOnBlur(el){
+    let before = null;
+    el.addEventListener('focus', () => { before = snapshotNow(); });
+    el.addEventListener('blur', () => { commitHistory(before); before = null; });
+  }
+  // Wires a drag-style interaction (pointerdown = start, pointerup/leave/cancel = end) to history
+  function wireHistoryOnDrag(el){
+    let before = null;
+    el.addEventListener('pointerdown', () => { before = snapshotNow(); }, true);
+    ['pointerup','pointerleave','pointercancel'].forEach(evt => {
+      el.addEventListener(evt, () => { if(before !== null){ commitHistory(before); before = null; } });
+    });
+  }
+  // Wires a range input (zoom slider) - "input" fires continuously, "change" fires once on release
+  function wireHistoryOnRange(el){
+    let before = null;
+    el.addEventListener('pointerdown', () => { before = snapshotNow(); });
+    el.addEventListener('change', () => { commitHistory(before); before = null; });
+  }
+
+  FIELD_IDS.forEach(id => { const el = document.getElementById(id); if(el){ wireHistoryOnBlur(el); el.addEventListener('paste', handlePlainPaste); el.addEventListener('input', scheduleSave); } });
+  TRACK_IDS.forEach(id => { const el = document.getElementById(id); if(el){ wireHistoryOnBlur(el); el.addEventListener('input', scheduleSave); el.addEventListener('change', scheduleSave); } });
+
+  const ORIGINAL_FIELDS = {};
+  FIELD_IDS.forEach(id => { const el = document.getElementById(id); ORIGINAL_FIELDS[id] = el ? el.innerText : ''; });
+  const ORIGINAL_LOGO = document.querySelector('#logoBox img').src;
+
+  function addItem(seed){
+    const before = snapshotNow();
+    items.push(seed || newItem());
+    renderItems();
+    commitHistory(before);
+    scheduleSave();
+  }
+
+  // ---------------- Currency & number parsing ----------------
+  function currencySymbol(){
+    return document.getElementById('currencySelect').value;
+  }
+  function fmtMoney(n){
+    const sym = currencySymbol();
+    const num = (isNaN(n)?0:n).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+    return sym ? (sym + ' ' + num) : num;
+  }
+  function parseNum(str){
+    if(typeof str !== 'string' || str.trim() === '') return 0;
+    const cleaned = str.replace(/[^0-9.\-]/g,'');
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? 0 : n;
+  }
+
+  // Calculator-style expression support for the Qty field, e.g. "20x3 + 10x10+5 x 10" -> 210
+  function tryEvalExpression(raw){
+    if(typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if(!trimmed) return null;
+    if(!/[+\-*/xX]/.test(trimmed)) return null; // plain numbers aren't "expressions" — leave them alone
+    if(!/^[\d\s+\-*/xX().]+$/.test(trimmed)) return null; // only allow calculator characters
+    const normalized = trimmed.replace(/[xX]/g, '*');
+    try{
+      const result = Function('"use strict"; return (' + normalized + ')')();
+      if(typeof result === 'number' && isFinite(result)) return result;
+    }catch(e){ /* incomplete/invalid expression while typing — ignore */ }
+    return null;
+  }
+  function formatCalcResult(n){
+    const rounded = Math.round(n * 100) / 100;
+    return String(rounded);
+  }
+
+  // ---------------- Rendering items ----------------
+  const itemsGrid = document.getElementById('itemsGrid');
+
+  // ---------------- Line reordering (drag a line up/down) ----------------
+  // Every cell of a line carries the same grip, so a line can be grabbed from whichever
+  // column happens to be on screen (the sheet scrolls horizontally, and a photo column
+  // can be scrolled out of view while Qty/Price/Total are visible).
+  const ROW_CELL_COUNT = 5; // photo | description | qty | price | total, in DOM order
+
+  function rowCells(index){
+    const out = [];
+    for(let i = 0; i < ROW_CELL_COUNT; i++){
+      const el = itemsGrid.children[index * ROW_CELL_COUNT + i];
+      if(el) out.push(el);
+    }
+    return out;
+  }
+
+  function clearDropMarkers(){
+    itemsGrid.querySelectorAll('.drop-before, .drop-after, .row-drag-src').forEach(el => {
+      el.classList.remove('drop-before', 'drop-after', 'row-drag-src');
+    });
+  }
+
+  // Single place that actually reorders, so drag and the ↑/↓ buttons behave identically
+  // (one undo step each, autosave triggered, totals re-rendered).
+  function moveItemTo(from, to){
+    if(from < 0 || from >= items.length) return;
+    to = Math.max(0, Math.min(items.length - 1, to));
+    if(from === to) return;
+    const before = snapshotNow();
+    const [moved] = items.splice(from, 1);
+    items.splice(to, 0, moved);
+    renderItems();
+    commitHistory(before);
+    scheduleSave();
+  }
+
+  function makeRowDragHandle(item){
+    const h = document.createElement('div');
+    h.className = 'row-drag-handle no-print';
+    h.title = 'Drag up or down to reorder this line';
+    h.innerHTML = '<span>\u21C5</span><span class="drag-label">Move line</span>';
+    setupRowDrag(h, item);
+    return h;
+  }
+
+  function setupRowDrag(handle, item){
+    let dragging = false, srcIndex = -1, dropIndex = -1, lastY = 0, rafId = null;
+
+    // Which gap the pointer is currently over: 0 = above the first line,
+    // items.length = below the last one.
+    function insertionIndexAt(y){
+      for(let i = 0; i < items.length; i++){
+        const first = itemsGrid.children[i * ROW_CELL_COUNT];
+        if(!first) continue;
+        const r = first.getBoundingClientRect();
+        if(y < r.top + r.height / 2) return i;
+      }
+      return items.length;
+    }
+
+    function paint(){
+      itemsGrid.querySelectorAll('.drop-before, .drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+      // Dropping immediately above or below where the line already sits is a no-op —
+      // show no marker rather than a misleading one.
+      if(dropIndex === srcIndex || dropIndex === srcIndex + 1) return;
+      if(dropIndex < items.length) rowCells(dropIndex).forEach(c => c.classList.add('drop-before'));
+      else rowCells(items.length - 1).forEach(c => c.classList.add('drop-after'));
+    }
+
+    // A single line is often taller than the screen (420px photo + 420px description),
+    // so without page-scrolling while dragging, most reorders would be impossible to
+    // complete — the target row simply never comes into view.
+    function autoScroll(){
+      if(!dragging){ rafId = null; return; }
+      const margin = 90;
+      if(lastY < margin) window.scrollBy(0, -Math.ceil((margin - lastY) / 5));
+      else if(lastY > window.innerHeight - margin) window.scrollBy(0, Math.ceil((lastY - (window.innerHeight - margin)) / 5));
+      rafId = requestAnimationFrame(autoScroll);
+    }
+
+    handle.addEventListener('pointerdown', (e) => {
+      srcIndex = items.indexOf(item);
+      if(srcIndex < 0) return;
+      e.preventDefault();      // stop text selection / native drag starting instead
+      e.stopPropagation();
+      dragging = true;
+      dropIndex = srcIndex;
+      lastY = e.clientY;
+      try{ handle.setPointerCapture(e.pointerId); }catch(err){ /* capture unsupported — drag still works via move events */ }
+      handle.classList.add('dragging');
+      document.body.classList.add('row-dragging');
+      rowCells(srcIndex).forEach(c => c.classList.add('row-drag-src'));
+      if(rafId === null) rafId = requestAnimationFrame(autoScroll);
+    });
+
+    handle.addEventListener('pointermove', (e) => {
+      if(!dragging) return;
+      lastY = e.clientY;
+      dropIndex = insertionIndexAt(lastY);
+      paint();
+    });
+
+    function finish(commit){
+      if(!dragging) return;
+      dragging = false;
+      if(rafId !== null){ cancelAnimationFrame(rafId); rafId = null; }
+      handle.classList.remove('dragging');
+      document.body.classList.remove('row-dragging');
+      clearDropMarkers();
+      if(!commit) return;
+      // dropIndex is a gap index; removing the dragged line first shifts everything
+      // below it up by one, so a downward move needs the target decremented.
+      let target = dropIndex;
+      if(target > srcIndex) target--;
+      moveItemTo(srcIndex, target);
+    }
+    handle.addEventListener('pointerup', () => finish(true));
+    handle.addEventListener('pointercancel', () => finish(false));
+  }
+
+  function renderItems(){
+    itemsGrid.innerHTML = '';
+    items.forEach((item, itemIndex) => {
+      item.rowMinHeight = item.rowMinHeight || DEFAULT_ROW_H;
+
+      // Photo cell
+      const photoTd = document.createElement('div');
+      photoTd.className = 'cell photo-cell';
+      photoTd.appendChild(makeRowDragHandle(item));
+      const grid = document.createElement('div');
+      grid.className = 'photo-grid';
+      item.photos.forEach(photo => {
+        photo.dispW = photo.dispW || DEFAULT_W;
+        photo.dispH = photo.dispH || DEFAULT_H;
+        photo.zoom = photo.zoom || 1;
+        photo.panX = photo.panX || 0;
+        photo.panY = photo.panY || 0;
+
+        const thumb = document.createElement('div');
+        thumb.className = 'photo-thumb';
+        thumb.style.width = photo.dispW + 'px';
+        thumb.style.height = photo.dispH + 'px';
+
+        const inner = document.createElement('div');
+        inner.className = 'photo-inner';
+        const img = document.createElement('img');
+        img.src = compositeDataURL(photo);
+        img.draggable = false;
+        applyImgTransform(img, photo);
+        inner.appendChild(img);
+        thumb.appendChild(inner);
+
+        if(photo.marks && photo.marks.length){
+          const badge = document.createElement('div');
+          badge.className = 'annot-badge';
+          badge.textContent = 'MARKED';
+          thumb.appendChild(badge);
+        }
+
+        const rm = document.createElement('button');
+        rm.className = 'rm-photo no-print';
+        rm.textContent = '×';
+        rm.title = 'Remove photo';
+        rm.onclick = (e) => {
+          e.stopPropagation();
+          const before = snapshotNow();
+          item.photos = item.photos.filter(p=>p.id!==photo.id);
+          renderItems();
+          commitHistory(before);
+          scheduleSave();
+        };
+        thumb.appendChild(rm);
+
+        const bottomBar = document.createElement('div');
+        bottomBar.className = 'photo-bottom-bar no-print';
+        thumb.appendChild(bottomBar);
+
+        const drawBtn = document.createElement('button');
+        drawBtn.className = 'draw-btn no-print';
+        drawBtn.textContent = '✎ Draw';
+        drawBtn.onclick = (e) => { e.stopPropagation(); openAnnotator(item.id, photo.id); };
+        bottomBar.appendChild(drawBtn);
+
+        const zoomWrap = document.createElement('div');
+        zoomWrap.className = 'zoom-overlay no-print';
+        const zoomOutBtn = document.createElement('button');
+        zoomOutBtn.type = 'button'; zoomOutBtn.className = 'zoom-btn'; zoomOutBtn.textContent = '−';
+        const zoomRange = document.createElement('input');
+        zoomRange.type = 'range'; zoomRange.min = '1'; zoomRange.max = '4'; zoomRange.step = '0.05';
+        zoomRange.value = photo.zoom;
+        wireHistoryOnRange(zoomRange);
+        zoomRange.oninput = (e) => {
+          photo.zoom = parseFloat(e.target.value);
+          applyImgTransform(img, photo);
+        };
+        zoomRange.addEventListener('change', scheduleSave);
+        const zoomInBtn = document.createElement('button');
+        zoomInBtn.type = 'button'; zoomInBtn.className = 'zoom-btn'; zoomInBtn.textContent = '+';
+        function stepZoom(delta){
+          const before = snapshotNow();
+          photo.zoom = Math.max(1, Math.min(4, Math.round((photo.zoom + delta) * 20) / 20));
+          zoomRange.value = photo.zoom;
+          applyImgTransform(img, photo);
+          commitHistory(before);
+          scheduleSave();
+        }
+        zoomOutBtn.onclick = () => stepZoom(-0.2);
+        zoomInBtn.onclick = () => stepZoom(0.2);
+        zoomWrap.appendChild(zoomOutBtn);
+        zoomWrap.appendChild(zoomRange);
+        zoomWrap.appendChild(zoomInBtn);
+        bottomBar.appendChild(zoomWrap);
+
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle no-print';
+        thumb.appendChild(handle);
+        setupResize(handle, thumb, photo, () => { applyImgTransform(img, photo); });
+
+        setupPan(img, photo);
+
+        grid.appendChild(thumb);
+      });
+      photoTd.appendChild(grid);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-photo-btn no-print';
+      addBtn.textContent = '+ Add photo';
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.multiple = true; fileInput.style.display='none';
+      fileInput.onchange = (e) => {
+        const picked = Array.from(e.target.files || []);
+        e.target.value = '';   // so picking the same photo(s) again still fires onchange
+        handleFiles(item.id, picked);
+      };
+      addBtn.onclick = () => fileInput.click();
+      photoTd.appendChild(addBtn);
+      photoTd.appendChild(fileInput);
+      itemsGrid.appendChild(photoTd);
+
+      // Description cell — one or more resizable, formattable text blocks
+      item.rowMinHeight = undefined; // migrated away; no longer used
+      const descTd = document.createElement('div');
+      descTd.className = 'cell desc-cell';
+      descTd.appendChild(makeRowDragHandle(item));
+      const descGrid = document.createElement('div');
+      descGrid.className = 'desc-grid';
+
+      if(!item.descriptions || !item.descriptions.length) item.descriptions = [ newDescBlock('') ];
+
+      item.descriptions.forEach(block => {
+        block.height = block.height || DEFAULT_ROW_H;
+        const descBlockEl = document.createElement('div');
+        descBlockEl.className = 'desc-block';
+
+        const toolbar = createFormatToolbar(() => descBox, item, block, descGrid);
+        descBlockEl.appendChild(toolbar);
+
+        const descBox = document.createElement('div');
+        descBox.className = 'desc-box';
+        descBox.contentEditable = 'true';
+        descBox.style.minHeight = block.height + 'px';
+        descBox.innerHTML = block.html;
+        descBox.oninput = () => { block.html = descBox.innerHTML; scheduleSave(); };
+        descBox.addEventListener('paste', handlePlainPaste);
+        wireHistoryOnBlur(descBox);
+        descBlockEl.appendChild(descBox);
+
+        const descHandle = document.createElement('div');
+        descHandle.className = 'desc-resize-handle no-print';
+        descBlockEl.appendChild(descHandle);
+        setupDescResize(descHandle, block, descBox);
+
+        descGrid.appendChild(descBlockEl);
+      });
+      descTd.appendChild(descGrid);
+
+      const addDescBtn = document.createElement('button');
+      addDescBtn.className = 'add-desc-btn no-print';
+      addDescBtn.textContent = '+ Add description box';
+      addDescBtn.onclick = () => {
+        const before = snapshotNow();
+        item.descriptions.push(newDescBlock(''));
+        renderItems();
+        commitHistory(before);
+        scheduleSave();
+      };
+      descTd.appendChild(addDescBtn);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'item-actions no-print';
+
+      // Tap-friendly alternative to dragging (easier on a phone, where a line can be
+      // taller than the screen) — same reorder, one step at a time.
+      const upBtn = document.createElement('button');
+      upBtn.className = 'row-move-btn';
+      upBtn.type = 'button';
+      upBtn.textContent = '\u2191';
+      upBtn.title = 'Move this line up';
+      upBtn.disabled = itemIndex === 0;
+      upBtn.onclick = () => moveItemTo(itemIndex, itemIndex - 1);
+      const downBtn = document.createElement('button');
+      downBtn.className = 'row-move-btn';
+      downBtn.type = 'button';
+      downBtn.textContent = '\u2193';
+      downBtn.title = 'Move this line down';
+      downBtn.disabled = itemIndex === items.length - 1;
+      downBtn.onclick = () => moveItemTo(itemIndex, itemIndex + 1);
+      wrap.appendChild(upBtn);
+      wrap.appendChild(downBtn);
+
+      const rmRow = document.createElement('button');
+      rmRow.className = 'row-remove';
+      rmRow.textContent = '– Remove this line';
+      rmRow.onclick = () => {
+        const before = snapshotNow();
+        const idx = items.findIndex(i=>i.id===item.id);
+        if(idx>-1) items.splice(idx,1);
+        renderItems(); updateGrandTotal();
+        commitHistory(before);
+        scheduleSave();
+      };
+      wrap.appendChild(rmRow);
+      descTd.appendChild(wrap);
+      itemsGrid.appendChild(descTd);
+
+      // Qty cell — the number on top drives the total; the small box below is an editable
+      // "how I got this number" note/calculation (e.g. 10x100) that live-updates the number above.
+      const qtyTd = document.createElement('div');
+      qtyTd.className = 'cell qty-cell';
+      qtyTd.appendChild(makeRowDragHandle(item));
+      const qtyInput = document.createElement('div');
+      qtyInput.contentEditable = 'true';
+      qtyInput.className='cell-input'; qtyInput.innerText = item.qty; qtyInput.setAttribute('inputmode','decimal');
+      wireHistoryOnBlur(qtyInput);
+      qtyInput.addEventListener('paste', handlePlainPaste);
+      qtyInput.oninput = () => {
+        item.qty = qtyInput.innerText;
+        recomputeTotal(item);
+        updateGrandTotal();
+        scheduleSave();
+      };
+      qtyTd.appendChild(qtyInput);
+
+      const qtyCalcInput = document.createElement('div');
+      qtyCalcInput.contentEditable = 'true';
+      qtyCalcInput.className = 'calc-note-input no-print';
+      qtyCalcInput.setAttribute('data-placeholder', 'calc, e.g. 10x100');
+      qtyCalcInput.innerText = item.qtyCalc || '';
+      qtyCalcInput.setAttribute('inputmode','decimal');
+      wireHistoryOnBlur(qtyCalcInput);
+      qtyCalcInput.addEventListener('paste', handlePlainPaste);
+      qtyCalcInput.oninput = () => {
+        item.qtyCalc = qtyCalcInput.innerText;
+        const val = tryEvalExpression(qtyCalcInput.innerText);
+        if(val !== null){
+          const formatted = formatCalcResult(val);
+          item.qty = formatted;
+          qtyInput.innerText = formatted;
+          recomputeTotal(item);
+          updateGrandTotal();
+        }
+        scheduleSave();
+      };
+      qtyTd.appendChild(qtyCalcInput);
+      itemsGrid.appendChild(qtyTd);
+
+      // Price cell — free text
+      const priceTd = document.createElement('div');
+      priceTd.className = 'cell price-cell';
+      priceTd.appendChild(makeRowDragHandle(item));
+      const priceInput = document.createElement('div');
+      priceInput.contentEditable = 'true';
+      priceInput.className='cell-input'; priceInput.innerText = item.price; priceInput.setAttribute('inputmode','decimal');
+      wireHistoryOnBlur(priceInput);
+      priceInput.addEventListener('paste', handlePlainPaste);
+      priceInput.oninput = () => { item.price = priceInput.innerText; recomputeTotal(item); updateGrandTotal(); scheduleSave(); };
+      priceTd.appendChild(priceInput);
+      itemsGrid.appendChild(priceTd);
+
+      // Total cell — free text too, auto-filled unless the person overrides it
+      const totalTd = document.createElement('div');
+      totalTd.className = 'cell total-cell';
+      totalTd.appendChild(makeRowDragHandle(item));
+      const totalInput = document.createElement('div');
+      totalInput.contentEditable = 'true';
+      totalInput.className='cell-input'; totalInput.style.fontWeight='700';
+      totalInput.innerText = item.total;
+      wireHistoryOnBlur(totalInput);
+      totalInput.addEventListener('paste', handlePlainPaste);
+      totalInput.oninput = () => {
+        if(totalInput.innerText.trim() === ''){
+          item.totalManual = false;
+          recomputeTotal(item);
+          totalInput.innerText = item.total;
+        } else {
+          item.total = totalInput.innerText;
+          item.totalManual = true;
+        }
+        updateGrandTotal();
+        scheduleSave();
+      };
+      totalTd.appendChild(totalInput);
+      itemsGrid.appendChild(totalTd);
+
+      if(!item.totalManual) recomputeTotal(item, totalInput);
+    });
+
+    updateGrandTotal();
+  }
+
+  function recomputeTotal(item, totalInputEl){
+    if(item.totalManual) return;
+    const q = parseNum(item.qty), p = parseNum(item.price);
+    item.total = fmtMoney(q * p);
+    const el = totalInputEl || itemsGrid.querySelectorAll('.total-cell .cell-input')[items.indexOf(item)];
+    if(el){ el.innerText = item.total; }
+  }
+
+  function updateGrandTotal(){
+    let grand = 0;
+    items.forEach(it => grand += parseNum(it.total));
+    document.getElementById('grandTotal').textContent = fmtMoney(grand);
+  }
+
+  document.getElementById('currencySelect').addEventListener('focus', function(){ this._before = snapshotNow(); });
+  document.getElementById('currencySelect').addEventListener('change', function(){
+    items.forEach(it => { if(!it.totalManual){ it.total = ''; } });
+    renderItems();
+    commitHistory(this._before);
+    this._before = null;
+    scheduleSave();
+  });
+  document.getElementById('addItemBtn').addEventListener('click', () => addItem());
+
+  // ---------------- Manual layout mode ----------------
+  const manualModeBtn = document.getElementById('manualModeBtn');
+  manualModeBtn.addEventListener('click', () => {
+    document.body.classList.toggle('manual-mode');
+    manualModeBtn.classList.toggle('active');
+  });
+  document.getElementById('resetLayoutBtn').addEventListener('click', () => {
+    const before = snapshotNow();
+    layout = { photoFr:60, descFr:40, qtyPx:120, pricePx:80, totalPx:130 };
+    applyLayoutVars();
+    commitHistory(before);
+    scheduleSave();
+  });
+
+  function setupColResize(handle, colKey){
+    let dragging=false, startX=0, startPhotoPx=0, startDescPx=0, startPx=0, before=null;
+    handle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      dragging = true;
+      before = snapshotNow();
+      handle.setPointerCapture(e.pointerId);
+      startX = e.clientX;
+      if(colKey === 'photo'){
+        const photoHead = handle.closest('.head-cell');
+        const descHead = photoHead.nextElementSibling;
+        startPhotoPx = photoHead.getBoundingClientRect().width;
+        startDescPx = descHead.getBoundingClientRect().width;
+      } else if(colKey === 'desc'){
+        startPx = layout.qtyPx;
+      } else if(colKey === 'qty'){
+        startPx = layout.pricePx;
+      } else if(colKey === 'price'){
+        startPx = layout.totalPx;
+      }
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if(!dragging) return;
+      const dx = e.clientX - startX;
+      if(colKey === 'photo'){
+        const combinedPx = startPhotoPx + startDescPx;
+        let newPhotoPx = Math.max(120, Math.min(combinedPx - 100, startPhotoPx + dx));
+        const newDescPx = combinedPx - newPhotoPx;
+        const combinedFr = layout.photoFr + layout.descFr;
+        const pxPerFr = combinedPx / combinedFr;
+        layout.photoFr = newPhotoPx / pxPerFr;
+        layout.descFr = newDescPx / pxPerFr;
+      } else if(colKey === 'desc'){
+        layout.qtyPx = Math.max(50, Math.min(300, startPx + dx));
+      } else if(colKey === 'qty'){
+        layout.pricePx = Math.max(50, Math.min(320, startPx + dx));
+      } else if(colKey === 'price'){
+        layout.totalPx = Math.max(60, Math.min(340, startPx + dx));
+      }
+      applyLayoutVars();
+    });
+    function stop(){ if(dragging){ dragging=false; commitHistory(before); before=null; scheduleSave(); } }
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointerleave', stop);
+    handle.addEventListener('pointercancel', stop);
+  }
+  document.querySelectorAll('.col-resize-handle').forEach(h => setupColResize(h, h.dataset.col));
+
+  function setupDescResize(handle, block, descBox){
+    let resizing=false, startY=0, startH=0, before=null;
+    handle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      resizing = true;
+      before = snapshotNow();
+      handle.setPointerCapture(e.pointerId);
+      startY = e.clientY;
+      startH = block.height;
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if(!resizing) return;
+      const dy = e.clientY - startY;
+      block.height = Math.max(80, Math.min(900, startH + dy));
+      descBox.style.minHeight = block.height + 'px';
+    });
+    function stop(){ if(resizing){ resizing=false; commitHistory(before); before=null; scheduleSave(); } }
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointerleave', stop);
+    handle.addEventListener('pointercancel', stop);
+  }
+
+  // Paste as plain text so pasted content matches the tool's own formatting instead of bringing in
+  // whatever fonts/colors/markup the source (Word, a webpage, etc.) had.
+  function handlePlainPaste(e){
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  }
+
+  // Small rich-text toolbar (Bold / Italic / Underline / font size) bound to one description box.
+  // getBoxEl is a function (not the element itself) because the box may not exist yet at call time.
+  function createFormatToolbar(getBoxEl, item, block, descGrid){
+    const bar = document.createElement('div');
+    bar.className = 'desc-toolbar no-print';
+
+    function focusBox(){ getBoxEl().focus(); }
+    function makeBtn(label, cls, cmd, arg){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      if(cls) b.className = cls;
+      b.onmousedown = (e) => e.preventDefault(); // keep selection inside the box
+      b.onclick = () => { focusBox(); document.execCommand(cmd, false, arg||null); getBoxEl().dispatchEvent(new Event('input')); };
+      return b;
+    }
+    bar.appendChild(makeBtn('B', 'b', 'bold'));
+    bar.appendChild(makeBtn('I', 'i', 'italic'));
+    bar.appendChild(makeBtn('U', 'u', 'underline'));
+
+    const sizeSelect = document.createElement('select');
+    [['12','Small'],['13.5','Normal'],['16','Medium'],['19','Large'],['24','X-Large']].forEach(([px,label]) => {
+      const opt = document.createElement('option'); opt.value = px; opt.textContent = label;
+      sizeSelect.appendChild(opt);
+    });
+    sizeSelect.value = '13.5';
+    sizeSelect.onmousedown = (e) => e.stopPropagation();
+    sizeSelect.onchange = () => {
+      const px = sizeSelect.value;
+      focusBox();
+      const sel = window.getSelection();
+      if(sel && sel.rangeCount && !sel.getRangeAt(0).collapsed){
+        const range = sel.getRangeAt(0);
+        const span = document.createElement('span');
+        span.style.fontSize = px + 'px';
+        try{
+          range.surroundContents(span);
+        }catch(err){
+          const frag = range.extractContents();
+          span.appendChild(frag);
+          range.insertNode(span);
+        }
+        sel.removeAllRanges();
+      }
+      getBoxEl().dispatchEvent(new Event('input'));
+    };
+    bar.appendChild(sizeSelect);
+
+    const clearBtn = makeBtn('Clear', '', 'removeFormat');
+    clearBtn.title = 'Clear formatting';
+    bar.appendChild(clearBtn);
+
+    const rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'rm-desc';
+    rmBtn.textContent = '×';
+    rmBtn.title = 'Remove this description box';
+    rmBtn.onclick = () => {
+      const before = snapshotNow();
+      item.descriptions = item.descriptions.filter(b => b !== block);
+      renderItems();
+      commitHistory(before);
+      scheduleSave();
+    };
+    bar.appendChild(rmBtn);
+
+    return bar;
+  }
+
+  // ---------------- Photo transform helpers ----------------
+  function applyImgTransform(img, photo){
+    img.style.transform = 'translate(-50%, -50%) translate(' + photo.panX + 'px, ' + photo.panY + 'px) scale(' + photo.zoom + ')';
+  }
+
+  function setupPan(img, photo){
+    let dragging = false, startX=0, startY=0, startPanX=0, startPanY=0, before=null;
+    img.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      before = snapshotNow();
+      img.setPointerCapture(e.pointerId);
+      startX = e.clientX; startY = e.clientY;
+      startPanX = photo.panX; startPanY = photo.panY;
+    });
+    img.addEventListener('pointermove', (e) => {
+      if(!dragging) return;
+      const dx = (e.clientX - startX);
+      const dy = (e.clientY - startY);
+      const maxOffset = Math.max(photo.dispW, photo.dispH) * photo.zoom;
+      photo.panX = Math.max(-maxOffset, Math.min(maxOffset, startPanX + dx));
+      photo.panY = Math.max(-maxOffset, Math.min(maxOffset, startPanY + dy));
+      applyImgTransform(img, photo);
+    });
+    function stop(){ if(dragging){ dragging=false; commitHistory(before); before=null; scheduleSave(); } }
+    img.addEventListener('pointerup', stop);
+    img.addEventListener('pointerleave', stop);
+    img.addEventListener('pointercancel', stop);
+  }
+
+  function setupResize(handle, thumb, photo, onResize){
+    let resizing=false, startX=0, startY=0, startW=0, startH=0, before=null;
+    handle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      resizing = true;
+      before = snapshotNow();
+      handle.setPointerCapture(e.pointerId);
+      startX = e.clientX; startY = e.clientY;
+      startW = photo.dispW; startH = photo.dispH;
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if(!resizing) return;
+      const dw = e.clientX - startX, dh = e.clientY - startY;
+      photo.dispW = Math.max(MIN_W, Math.min(MAX_W, startW + dw));
+      photo.dispH = Math.max(MIN_H, Math.min(MAX_H, startH + dh));
+      thumb.style.width = photo.dispW + 'px';
+      thumb.style.height = photo.dispH + 'px';
+      if(onResize) onResize();
+    });
+    function stop(){ if(resizing){ resizing=false; commitHistory(before); before=null; scheduleSave(); } }
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointerleave', stop);
+    handle.addEventListener('pointercancel', stop);
+  }
+
+  // ---------------- Photo handling ----------------
+  // Target ceiling for each photo's saved data (base64 string length, which is what actually
+  // counts against storage-backend size limits). ~550KB base64 per photo keeps a 15-photo
+  // quotation (≈8MB total) comfortably under any per-item or per-document quota, while still
+  // looking sharp at the print/PDF sizes this tool uses. If a photo comes out larger than this
+  // at a reasonable quality, we step quality and then dimensions down until it fits, instead of
+  // saving an oversized photo that silently fails to persist later.
+  const TARGET_B64_LEN = 550 * 1024;
+  const MIN_QUALITY = 0.5;
+  const MIN_DIM_FLOOR = 700;
+
+  function encodeWithinBudget(img, startW, startH){
+    let w = startW, h = startH;
+    let quality = 0.88;
+    let dataURL = null;
+    for(let dimPass = 0; dimPass < 6; dimPass++){
+      const cnv = document.createElement('canvas');
+      cnv.width = w; cnv.height = h;
+      cnv.getContext('2d').drawImage(img, 0, 0, w, h);
+      quality = 0.88;
+      for(let qPass = 0; qPass < 8; qPass++){
+        dataURL = cnv.toDataURL('image/jpeg', quality);
+        if(dataURL.length <= TARGET_B64_LEN || quality <= MIN_QUALITY) break;
+        quality = Math.max(MIN_QUALITY, quality - 0.08);
+      }
+      // Release the canvas's pixel buffer right away. Phones cap total canvas memory, and a
+      // canvas that is merely unreferenced isn't always freed before the next one is allocated.
+      cnv.width = 0; cnv.height = 0;
+      if(dataURL.length <= TARGET_B64_LEN || Math.max(w,h) <= MIN_DIM_FLOOR) break;
+      // Still too big even at minimum quality — shrink dimensions and try again.
+      w = Math.round(w * 0.82); h = Math.round(h * 0.82);
+    }
+    return { dataURL, w, h };
+  }
+
+  // Loads one picked file into a photo-ready { dataURL, w, h, baseImg }. Rejects (rather than
+  // silently never finishing) when the file can't be read or decoded — the old code had no
+  // onerror handlers at all, so an undecodable or too-big photo just vanished with no message.
+  function loadPhotoFile(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('could not be read'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('format not supported by this browser (e.g. HEIC)'));
+        img.onload = () => {
+          try{
+            let w = img.naturalWidth, h = img.naturalHeight;
+            const scale = Math.min(1, MAX_DIM / Math.max(w,h));
+            w = Math.round(w*scale); h = Math.round(h*scale);
+            const { dataURL, w: finalW, h: finalH } = encodeWithinBudget(img, w, h);
+            if(!dataURL || dataURL.length < 100){ reject(new Error('too large for this device to process')); return; }
+            const baseImg = new Image();
+            baseImg.onerror = () => reject(new Error('could not be processed'));
+            baseImg.onload = () => resolve({ dataURL, w: finalW, h: finalH, baseImg });
+            baseImg.src = dataURL;
+          }catch(err){
+            reject(new Error('too large for this device to process'));
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Picked photos are processed ONE AT A TIME. Previously every picked file was decoded, drawn to
+  // canvases and re-encoded simultaneously — on a phone that can exhaust memory, after which the
+  // later photos silently never appeared (only the first survived), with no error shown.
+  // Sequential processing keeps peak memory at one photo, and anything that still fails is
+  // reported by name instead of disappearing.
+  let photoBatchBusy = false;
+  async function handleFiles(itemId, fileList){
+    const item = items.find(i=>i.id===itemId);
+    if(!item) return;
+    const files = Array.from(fileList || []);   // copy now: the input's live FileList is cleared/replaced on re-render
+    if(!files.length) return;
+    if(photoBatchBusy){ alert('Still adding the previous photos — please wait a moment, then add more.'); return; }
+    photoBatchBusy = true;
+    const before = snapshotNow();
+    const failed = [];
+    let added = 0;
+    try{
+      for(let i = 0; i < files.length; i++){
+        const file = files[i];
+        try{
+          // Time-box each photo so one that never finishes can't leave photoBatchBusy stuck on
+          // (which would block every later add until the page is reloaded).
+          const { dataURL, w, h, baseImg } = await Promise.race([
+            loadPhotoFile(file),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('took too long to process')), 45000))
+          ]);
+          const photo = {
+            id: uid('ph'), original: dataURL, marks: [], w: w, h: h, imgEl: baseImg,
+            dispW: DEFAULT_W, dispH: DEFAULT_H, zoom: 1, panX: 0, panY: 0, _blobSaved: false
+          };
+          item.photos.push(photo);
+          added++;
+          if(currentDocId) await savePhotoBlob(currentDocId, photo);
+        }catch(err){
+          console.error('Photo could not be added', file && file.name, err);
+          failed.push((file && file.name ? file.name : 'photo ' + (i+1)) + ' — ' + (err && err.message ? err.message : 'failed'));
+        }
+      }
+    }finally{
+      photoBatchBusy = false;
+    }
+    if(added){
+      renderItems();
+      commitHistory(before);   // one undo step for the whole batch
+      scheduleSave();
+    }
+    if(failed.length){
+      alert(failed.length + ' of ' + files.length + ' photo(s) could not be added:\n\n' + failed.join('\n') +
+        '\n\nTip: if this keeps happening, add fewer photos at a time.');
+    }
+  }
+
+  function compositeDataURL(photo){
+    const cnv = document.createElement('canvas');
+    cnv.width = photo.w || DEFAULT_W; cnv.height = photo.h || DEFAULT_H;
+    const ctx = cnv.getContext('2d');
+    // JPEG has no alpha channel, so any part of the canvas we don't paint over gets flattened
+    // to solid black on export. Always fill white first so a not-yet-loaded (or permanently
+    // missing) image never turns into a black square with just the drawn marks floating on it.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cnv.width, cnv.height);
+    if(photo.imgEl && photo.imgEl.complete && photo.imgEl.naturalWidth > 0){
+      ctx.drawImage(photo.imgEl, 0, 0, cnv.width, cnv.height);
+    } else if(!photo.original){
+      // The image data itself is missing (never finished saving, or the browser couldn't find
+      // it in storage) — make that obvious instead of quietly showing a blank/white photo.
+      ctx.fillStyle = '#f1f3f5';
+      ctx.fillRect(0, 0, cnv.width, cnv.height);
+      ctx.strokeStyle = '#e08a2c';
+      ctx.lineWidth = Math.max(2, Math.round(cnv.width * 0.01));
+      ctx.strokeRect(ctx.lineWidth/2, ctx.lineWidth/2, cnv.width - ctx.lineWidth, cnv.height - ctx.lineWidth);
+      ctx.fillStyle = '#5b6472';
+      const fontSize = Math.max(14, Math.round(cnv.width * 0.06));
+      ctx.font = '700 ' + fontSize + 'px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⚠ Photo failed to save', cnv.width/2, cnv.height/2 - fontSize*0.7);
+      ctx.font = '400 ' + Math.round(fontSize*0.7) + 'px Inter, system-ui, sans-serif';
+      ctx.fillText('Re-upload this photo', cnv.width/2, cnv.height/2 + fontSize*0.6);
+    }
+    drawMarks(ctx, photo.marks);
+    return cnv.toDataURL('image/jpeg', 0.9);
+  }
+
+  // ---------------- Mark rendering (strokes + text) ----------------
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+  function contrastColor(hex){
+    const c = (hex||'#e08a2c').replace('#','');
+    const r = parseInt(c.substring(0,2),16)||0, g = parseInt(c.substring(2,4),16)||0, b = parseInt(c.substring(4,6),16)||0;
+    const yiq = (r*299+g*587+b*114)/1000;
+    return yiq >= 150 ? '#111318' : '#ffffff';
+  }
+  function measureTextBox(ctx, mark){
+    ctx.font = '700 ' + mark.fontSize + 'px Inter, system-ui, sans-serif';
+    const lines = String(mark.text||'').split('\n');
+    const lineHeight = mark.fontSize * 1.25;
+    let maxW = 0;
+    lines.forEach(l => { const w = ctx.measureText(l).width; if(w>maxW) maxW=w; });
+    const padX = mark.style === 'plain' ? 4 : mark.fontSize*0.45;
+    const padY = mark.style === 'plain' ? 2 : mark.fontSize*0.3;
+    return { w: maxW + padX*2, h: lines.length*lineHeight + padY*2, lineHeight, padX, padY, lines };
+  }
+  function drawTextMark(ctx, mark){
+    const box = measureTextBox(ctx, mark);
+    const bx = mark.x - box.w/2, by = mark.y - box.h/2;
+    mark._box = { x: bx, y: by, w: box.w, h: box.h };
+    ctx.font = '700 ' + mark.fontSize + 'px Inter, system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    if(mark.style === 'solidBox'){
+      ctx.fillStyle = mark.color;
+      roundRect(ctx, bx, by, box.w, box.h, Math.min(10, mark.fontSize*0.2));
+      ctx.fill();
+      ctx.fillStyle = contrastColor(mark.color);
+      box.lines.forEach((line,i)=>{
+        const lw = ctx.measureText(line).width;
+        ctx.fillText(line, bx + (box.w-lw)/2, by + box.padY + i*box.lineHeight);
+      });
+    } else if(mark.style === 'outline'){
+      ctx.lineWidth = Math.max(2, mark.fontSize*0.09);
+      ctx.strokeStyle = '#000000';
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = mark.color;
+      box.lines.forEach((line,i)=>{
+        const lw = ctx.measureText(line).width;
+        const tx = bx + (box.w-lw)/2, ty = by + box.padY + i*box.lineHeight;
+        ctx.strokeText(line, tx, ty);
+        ctx.fillText(line, tx, ty);
+      });
+    } else {
+      ctx.fillStyle = mark.color;
+      box.lines.forEach((line,i)=>{
+        const lw = ctx.measureText(line).width;
+        const tx = bx + (box.w-lw)/2, ty = by + box.padY + i*box.lineHeight;
+        ctx.fillText(line, tx, ty);
+      });
+    }
+  }
+  function drawArrowMark(ctx, m){
+    // Bold solid block arrow (thick rectangular shaft + large triangular head), like a clipart arrow
+    const dx = m.x2-m.x1, dy = m.y2-m.y1;
+    const L = Math.max(1, Math.hypot(dx,dy));
+    const ux = dx/L, uy = dy/L;   // unit direction
+    const px = -uy, py = ux;     // unit perpendicular
+
+    const shaftHalf = m.width * 1.3;
+    const headHalf = m.width * 2.7;
+    const headLen = Math.min(L * 0.5, Math.max(m.width * 4.5, 20));
+    const shaftLen = L - headLen;
+
+    function worldPt(along, across){
+      return [ m.x1 + ux*along + px*across, m.y1 + uy*along + py*across ];
+    }
+    const p1 = worldPt(0, -shaftHalf);
+    const p2 = worldPt(shaftLen, -shaftHalf);
+    const p3 = worldPt(shaftLen, -headHalf);
+    const p4 = worldPt(L, 0);
+    const p5 = worldPt(shaftLen, headHalf);
+    const p6 = worldPt(shaftLen, shaftHalf);
+    const p7 = worldPt(0, shaftHalf);
+
+    ctx.fillStyle = m.color;
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p3[0], p3[1]);
+    ctx.lineTo(p4[0], p4[1]);
+    ctx.lineTo(p5[0], p5[1]);
+    ctx.lineTo(p6[0], p6[1]);
+    ctx.lineTo(p7[0], p7[1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+  function pointToSegmentDistance(p, a, b){
+    const dx=b[0]-a[0], dy=b[1]-a[1];
+    const lenSq = dx*dx+dy*dy;
+    let t = lenSq ? ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const projx = a[0]+t*dx, projy = a[1]+t*dy;
+    return Math.hypot(p[0]-projx, p[1]-projy);
+  }
+  function hitTestArrow(pt){
+    for(let i=workingMarks.length-1;i>=0;i--){
+      const m = workingMarks[i];
+      if(m.kind !== 'arrow') continue;
+      const dHead = Math.hypot(pt[0]-m.x2, pt[1]-m.y2);
+      if(dHead <= Math.max(24, m.width*2.8)) return {mark:m, part:'head'};
+      const dTail = Math.hypot(pt[0]-m.x1, pt[1]-m.y1);
+      if(dTail <= Math.max(20, m.width*1.6)) return {mark:m, part:'tail'};
+      const distSeg = pointToSegmentDistance(pt, [m.x1,m.y1], [m.x2,m.y2]);
+      if(distSeg <= Math.max(14, m.width*1.4)) return {mark:m, part:'body'};
+    }
+    return null;
+  }
+  function drawMarks(ctx, marks){
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    (marks||[]).forEach(m => {
+      if(m.kind === 'text'){
+        if(m.text && m.text.trim() !== '') drawTextMark(ctx, m);
+      } else if(m.kind === 'arrow'){
+        drawArrowMark(ctx, m);
+      } else {
+        if(!m.points || m.points.length < 1) return;
+        ctx.strokeStyle = m.color; ctx.lineWidth = m.width;
+        ctx.beginPath();
+        ctx.moveTo(m.points[0][0], m.points[0][1]);
+        for(let i=1;i<m.points.length;i++){ ctx.lineTo(m.points[i][0], m.points[i][1]); }
+        ctx.stroke();
+      }
+    });
+  }
+
+  // ---------------- Annotator modal ----------------
+  const modalOverlay = document.getElementById('modalOverlay');
+  const annotCanvas = document.getElementById('annotCanvas');
+  const actx = annotCanvas.getContext('2d');
+  const swatchesEl = document.getElementById('swatches');
+  const widthRange = document.getElementById('widthRange');
+  const lineWidthRow = document.getElementById('lineWidthRow');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const freehandModeBtn = document.getElementById('freehandModeBtn');
+  const lineModeBtn = document.getElementById('lineModeBtn');
+  const textModeBtn = document.getElementById('textModeBtn');
+  const arrowModeBtn = document.getElementById('arrowModeBtn');
+  const placeArrowBtn = document.getElementById('placeArrowBtn');
+  const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+  const textPanel = document.getElementById('textPanel');
+  const textInput = document.getElementById('textInput');
+  const styleCycleBtn = document.getElementById('styleCycleBtn');
+  const fontSizeRange = document.getElementById('fontSizeRange');
+  const placeTextBtn = document.getElementById('placeTextBtn');
+
+  const PALETTE = ['#ff6a00', '#e2372b', '#f2c94c', '#22c55e', '#2f80ed', '#111318', '#ffffff'];
+  let currentColor = PALETTE[0];
+  let drawMode = 'freehand';
+  const TEXT_STYLES = [
+    {key:'solidBox', label:'Style: Solid box'},
+    {key:'outline', label:'Style: Outline'},
+    {key:'plain', label:'Style: Plain'}
+  ];
+  let textStyleIdx = 0;
+
+  let spectrumSwatchEl = null;
+  function clearSwatchSelection(){
+    Array.from(swatchesEl.children).forEach(el=>el.classList.remove('selected'));
+  }
+  PALETTE.forEach((c,i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'swatch' + (i===0?' selected':'');
+    b.style.background = c;
+    b.onclick = () => {
+      currentColor = c; clearSwatchSelection(); b.classList.add('selected');
+      if(selectedMark){ selectedMark.color = currentColor; fullRedraw(); }
+    };
+    swatchesEl.appendChild(b);
+  });
+  spectrumSwatchEl = document.createElement('label');
+  spectrumSwatchEl.className = 'swatch spectrum-swatch';
+  spectrumSwatchEl.title = 'Pick any color';
+  const colorInput = document.createElement('input');
+  colorInput.type = 'color';
+  colorInput.value = '#e08a2c';
+  colorInput.oninput = (e) => {
+    currentColor = e.target.value;
+    clearSwatchSelection();
+    spectrumSwatchEl.classList.add('selected');
+    if(selectedMark){ selectedMark.color = currentColor; fullRedraw(); }
+  };
+  spectrumSwatchEl.appendChild(colorInput);
+  swatchesEl.appendChild(spectrumSwatchEl);
+
+  function setMode(mode){
+    drawMode = mode;
+    freehandModeBtn.classList.toggle('selected', mode==='freehand');
+    lineModeBtn.classList.toggle('selected', mode==='line');
+    arrowModeBtn.classList.toggle('selected', mode==='arrow');
+    textModeBtn.classList.toggle('selected', mode==='text');
+    lineWidthRow.style.display = (mode==='text') ? 'none' : 'flex';
+    textPanel.classList.toggle('open', mode==='text');
+    placeArrowBtn.style.display = (mode==='arrow') ? 'inline-block' : 'none';
+    if(mode !== 'text' && mode !== 'arrow'){ deselectMark(); }
+  }
+  freehandModeBtn.onclick = () => setMode('freehand');
+  lineModeBtn.onclick = () => setMode('line');
+  arrowModeBtn.onclick = () => setMode('arrow');
+  textModeBtn.onclick = () => setMode('text');
+
+  styleCycleBtn.onclick = () => {
+    textStyleIdx = (textStyleIdx+1) % TEXT_STYLES.length;
+    styleCycleBtn.textContent = TEXT_STYLES[textStyleIdx].label;
+    if(selectedMark){ selectedMark.style = TEXT_STYLES[textStyleIdx].key; fullRedraw(); }
+  };
+  fontSizeRange.oninput = () => {
+    if(selectedMark){ selectedMark.fontSize = parseFloat(fontSizeRange.value); fullRedraw(); }
+  };
+  widthRange.addEventListener('input', () => {
+    if(selectedMark && selectedMark.kind === 'arrow'){ selectedMark.width = parseFloat(widthRange.value); fullRedraw(); }
+  });
+  textInput.oninput = () => {
+    if(selectedMark){ selectedMark.text = textInput.value; fullRedraw(); }
+  };
+  placeTextBtn.onclick = () => {
+    const mark = {
+      kind:'text', x: annotCanvas.width/2, y: annotCanvas.height/2,
+      text: textInput.value.trim() || 'Text',
+      color: currentColor, style: TEXT_STYLES[textStyleIdx].key,
+      fontSize: parseFloat(fontSizeRange.value)
+    };
+    workingMarks.push(mark);
+    redoStackAnnot = [];
+    selectMark(mark);
+    fullRedraw();
+    updateUndoRedoState();
+  };
+  placeArrowBtn.onclick = () => {
+    const cx = annotCanvas.width/2, cy = annotCanvas.height/2;
+    const mark = {
+      kind:'arrow', x1: cx-70, y1: cy, x2: cx+70, y2: cy,
+      color: currentColor, width: Math.max(12, parseFloat(widthRange.value)*1.6)
+    };
+    workingMarks.push(mark);
+    redoStackAnnot = [];
+    selectMark(mark);
+    fullRedraw();
+    updateUndoRedoState();
+  };
+  deleteSelectedBtn.onclick = () => {
+    if(!selectedMark) return;
+    workingMarks = workingMarks.filter(m => m !== selectedMark);
+    deselectMark();
+    fullRedraw();
+    updateUndoRedoState();
+  };
+
+  let editingItemId = null, editingPhotoId = null;
+  let workingMarks = [], redoStackAnnot = [];
+  let baseImage = null;
+  let currentStroke = null;
+  let drawing = false;
+  let lineStart = null;
+  let selectedMark = null;
+  let draggingMark = false, dragStartPt = null, dragMarkStart = null, dragPart = null;
+
+  function selectMark(mark){
+    selectedMark = mark;
+    currentColor = mark.color;
+    clearSwatchSelection();
+    if(mark.kind === 'text'){
+      textInput.value = mark.text;
+      fontSizeRange.value = mark.fontSize;
+      textStyleIdx = TEXT_STYLES.findIndex(s=>s.key===mark.style); if(textStyleIdx<0) textStyleIdx=0;
+      styleCycleBtn.textContent = TEXT_STYLES[textStyleIdx].label;
+    } else if(mark.kind === 'arrow'){
+      widthRange.value = mark.width;
+    }
+    deleteSelectedBtn.style.display = 'inline-block';
+  }
+  function deselectMark(){
+    selectedMark = null;
+    textInput.value = '';
+    deleteSelectedBtn.style.display = 'none';
+  }
+
+  function findPhoto(itemId, photoId){
+    const item = items.find(i=>i.id===itemId);
+    if(!item) return null;
+    return item.photos.find(p=>p.id===photoId);
+  }
+
+  function openAnnotator(itemId, photoId){
+    const photo = findPhoto(itemId, photoId);
+    if(!photo) return;
+    editingItemId = itemId; editingPhotoId = photoId;
+    workingMarks = JSON.parse(JSON.stringify(photo.marks || []));
+    redoStackAnnot = [];
+    annotCanvas.width = photo.w; annotCanvas.height = photo.h;
+    baseImage = photo.imgEl;
+    setMode('freehand');
+    fullRedraw();
+    updateUndoRedoState();
+    modalOverlay.classList.add('open');
+  }
+
+  function fullRedraw(){
+    actx.clearRect(0,0,annotCanvas.width, annotCanvas.height);
+    if(baseImage && baseImage.complete){
+      actx.drawImage(baseImage, 0, 0, annotCanvas.width, annotCanvas.height);
+    }
+    drawMarks(actx, workingMarks);
+    if(selectedMark){
+      actx.save();
+      if(selectedMark.kind === 'arrow'){
+        actx.fillStyle = '#2f80ed';
+        actx.beginPath(); actx.arc(selectedMark.x2, selectedMark.y2, 9, 0, Math.PI*2); actx.fill();
+        actx.beginPath(); actx.arc(selectedMark.x1, selectedMark.y1, 7, 0, Math.PI*2); actx.fill();
+      } else {
+        actx.strokeStyle = '#2f80ed';
+        actx.setLineDash([6,4]);
+        actx.lineWidth = 2;
+        const b = selectedMark._box;
+        if(b) actx.strokeRect(b.x-4, b.y-4, b.w+8, b.h+8);
+      }
+      actx.restore();
+    }
+  }
+
+  function updateUndoRedoState(){
+    undoBtn.disabled = workingMarks.length === 0;
+    redoBtn.disabled = redoStackAnnot.length === 0;
+  }
+
+  function canvasPoint(evt){
+    const rect = annotCanvas.getBoundingClientRect();
+    const scaleX = annotCanvas.width / rect.width;
+    const scaleY = annotCanvas.height / rect.height;
+    return [ (evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY ];
+  }
+
+  function hitTestText(pt){
+    for(let i=workingMarks.length-1;i>=0;i--){
+      const m = workingMarks[i];
+      if(m.kind === 'text' && m._box){
+        const b = m._box;
+        if(pt[0] >= b.x && pt[0] <= b.x+b.w && pt[1] >= b.y && pt[1] <= b.y+b.h) return m;
+      }
+    }
+    return null;
+  }
+
+  annotCanvas.addEventListener('pointerdown', (evt) => {
+    const pt = canvasPoint(evt);
+    if(drawMode === 'text'){
+      const hit = hitTestText(pt);
+      if(hit){
+        selectMark(hit);
+        draggingMark = true; dragStartPt = pt; dragMarkStart = {x:hit.x, y:hit.y};
+        fullRedraw();
+      } else {
+        deselectMark();
+        fullRedraw();
+      }
+      annotCanvas.setPointerCapture(evt.pointerId);
+      return;
+    }
+    if(drawMode === 'arrow'){
+      const hit = hitTestArrow(pt);
+      if(hit){
+        selectMark(hit.mark);
+        draggingMark = true; dragPart = hit.part; dragStartPt = pt;
+        dragMarkStart = {x1:hit.mark.x1, y1:hit.mark.y1, x2:hit.mark.x2, y2:hit.mark.y2};
+        fullRedraw();
+      } else {
+        deselectMark();
+        fullRedraw();
+      }
+      annotCanvas.setPointerCapture(evt.pointerId);
+      return;
+    }
+    drawing = true;
+    annotCanvas.setPointerCapture(evt.pointerId);
+    if(drawMode === 'line'){
+      lineStart = pt;
+      currentStroke = { kind:'stroke', color: currentColor, width: parseFloat(widthRange.value), points: [pt, pt] };
+    } else {
+      currentStroke = { kind:'stroke', color: currentColor, width: parseFloat(widthRange.value), points: [pt] };
+    }
+  });
+  annotCanvas.addEventListener('pointermove', (evt) => {
+    const pt = canvasPoint(evt);
+    if(drawMode === 'text'){
+      if(draggingMark && selectedMark){
+        selectedMark.x = dragMarkStart.x + (pt[0]-dragStartPt[0]);
+        selectedMark.y = dragMarkStart.y + (pt[1]-dragStartPt[1]);
+        fullRedraw();
+      }
+      return;
+    }
+    if(drawMode === 'arrow'){
+      if(draggingMark && selectedMark){
+        const dx = pt[0]-dragStartPt[0], dy = pt[1]-dragStartPt[1];
+        if(dragPart === 'head'){
+          selectedMark.x2 = dragMarkStart.x2 + dx;
+          selectedMark.y2 = dragMarkStart.y2 + dy;
+        } else if(dragPart === 'tail'){
+          selectedMark.x1 = dragMarkStart.x1 + dx;
+          selectedMark.y1 = dragMarkStart.y1 + dy;
+        } else {
+          selectedMark.x1 = dragMarkStart.x1 + dx;
+          selectedMark.y1 = dragMarkStart.y1 + dy;
+          selectedMark.x2 = dragMarkStart.x2 + dx;
+          selectedMark.y2 = dragMarkStart.y2 + dy;
+        }
+        fullRedraw();
+      }
+      return;
+    }
+    if(!drawing || !currentStroke) return;
+    if(drawMode === 'line'){
+      currentStroke.points = [lineStart, pt];
+      fullRedraw();
+      drawMarks(actx, [currentStroke]);
+    } else {
+      const prev = currentStroke.points[currentStroke.points.length-1];
+      currentStroke.points.push(pt);
+      actx.strokeStyle = currentStroke.color; actx.lineWidth = currentStroke.width;
+      actx.lineCap='round'; actx.lineJoin='round';
+      actx.beginPath(); actx.moveTo(prev[0], prev[1]); actx.lineTo(pt[0], pt[1]); actx.stroke();
+    }
+  });
+  function endStroke(){
+    if(drawMode === 'text' || drawMode === 'arrow'){
+      draggingMark = false;
+      dragPart = null;
+      return;
+    }
+    if(drawing && currentStroke && currentStroke.points.length > 1){
+      const dx = currentStroke.points[currentStroke.points.length-1][0] - currentStroke.points[0][0];
+      const dy = currentStroke.points[currentStroke.points.length-1][1] - currentStroke.points[0][1];
+      const moved = Math.hypot(dx,dy) > 1 || currentStroke.points.length > 2;
+      if(moved){
+        workingMarks.push(currentStroke);
+        redoStackAnnot = [];
+      }
+      updateUndoRedoState();
+    }
+    fullRedraw();
+    drawing = false; currentStroke = null; lineStart = null;
+  }
+  annotCanvas.addEventListener('pointerup', endStroke);
+  annotCanvas.addEventListener('pointerleave', endStroke);
+  annotCanvas.addEventListener('pointercancel', endStroke);
+
+  undoBtn.addEventListener('click', () => {
+    if(!workingMarks.length) return;
+    redoStackAnnot.push(workingMarks.pop());
+    deselectMark();
+    fullRedraw(); updateUndoRedoState();
+  });
+  redoBtn.addEventListener('click', () => {
+    if(!redoStackAnnot.length) return;
+    workingMarks.push(redoStackAnnot.pop());
+    fullRedraw(); updateUndoRedoState();
+  });
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    if(!workingMarks.length) return;
+    redoStackAnnot = redoStackAnnot.concat(workingMarks.slice().reverse());
+    workingMarks = [];
+    deselectMark();
+    fullRedraw(); updateUndoRedoState();
+  });
+  document.getElementById('cancelAnnotBtn').addEventListener('click', closeAnnotator);
+  document.getElementById('saveAnnotBtn').addEventListener('click', () => {
+    const before = snapshotNow();
+    const photo = findPhoto(editingItemId, editingPhotoId);
+    if(photo){ photo.marks = workingMarks.map(m => { const c = Object.assign({}, m); delete c._box; return c; }); }
+    closeAnnotator();
+    renderItems();
+    commitHistory(before);
+    scheduleSave();
+  });
+  function closeAnnotator(){
+    modalOverlay.classList.remove('open');
+    editingItemId = null; editingPhotoId = null; drawing=false; currentStroke=null;
+    deselectMark();
+  }
+  modalOverlay.addEventListener('click', (e) => { if(e.target === modalOverlay) closeAnnotator(); });
+
+  // ---------------- Logo upload ----------------
+  const logoBox = document.getElementById('logoBox');
+  const logoInput = document.getElementById('logoInput');
+  logoBox.addEventListener('click', () => logoInput.click());
+  logoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const before = snapshotNow();
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      logoBox.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = ev.target.result;
+      logoBox.appendChild(img);
+      commitHistory(before);
+      scheduleSave();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ---------------- Print / Save as PDF (filename follows Doc No + client) ----------------
+  const ORIGINAL_TITLE = document.title;
+  let titleSwapped = false;
+  function buildFileBaseName(){
+    const docNo = document.getElementById('docNo').value.trim() || 'Quotation';
+    let client = (document.getElementById('billName').innerText || '').split('\n')[0].trim();
+    if(!client || client === 'Client Name') client = '';
+    const raw = client ? (docNo + ' - ' + client) : docNo;
+    return raw.replace(/[\/\\:*?"<>|]/g, '-');
+  }
+  function useDocNoAsFilename(){
+    document.title = buildFileBaseName();
+    titleSwapped = true;
+  }
+  function restoreTitle(){
+    if(titleSwapped){ document.title = ORIGINAL_TITLE; titleSwapped = false; }
+  }
+  document.getElementById('printBtn').addEventListener('click', () => {
+    useDocNoAsFilename();
+    window.print();
+  });
+  window.addEventListener('afterprint', restoreTitle);
+  window.addEventListener('focus', () => { if(titleSwapped) setTimeout(restoreTitle, 400); });
+
+  // ---------------- Export as Excel ----------------
+  function htmlToPlainText(html){
+    const div = document.createElement('div');
+    div.innerHTML = html || '';
+    div.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    div.querySelectorAll('div,p').forEach(el => el.appendChild(document.createTextNode('\n')));
+    return (div.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function ensureXLSXLib(){
+    if(window.XLSX) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = () => resolve(!!window.XLSX);
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+  }
+  async function exportExcel(){
+    const btn = document.getElementById('exportExcelBtn');
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+    try{
+      const ok = await ensureXLSXLib();
+      if(!ok || !window.XLSX){
+        alert("Couldn't load the Excel export library — this needs an internet connection the first time you use it. Save as PDF still works offline.");
+        return;
+      }
+      const g = id => { const el = document.getElementById(id); return el ? el.innerText : ''; };
+      const rows = [];
+      rows.push([g('companyName')]);
+      rows.push([g('companyReg')]);
+      rows.push([g('companyAddr1')]);
+      rows.push([g('companyAddr2')]);
+      rows.push([g('companyContact')]);
+      rows.push([]);
+      rows.push(['Doc No', document.getElementById('docNo').value]);
+      rows.push(['Date', document.getElementById('docDate').value]);
+      rows.push(['Client', g('billName')]);
+      rows.push(['Client Address', g('billAddr')]);
+      rows.push(['Client Phone', g('billPhone')]);
+      rows.push([]);
+      rows.push(['Description', 'Qty', 'Calc', 'Price', 'Total']);
+      items.forEach(it => {
+        const desc = (it.descriptions||[]).map(b => htmlToPlainText(b.html)).filter(Boolean).join('\n\n');
+        rows.push([desc, it.qty, it.qtyCalc||'', it.price, it.total]);
+      });
+      rows.push([]);
+      rows.push(['', '', '', 'Total Amount Due', document.getElementById('grandTotal').textContent]);
+      rows.push([]);
+      rows.push(['Payment Terms', g('termsPayment')]);
+      rows.push(['Lead Time', g('termsLead')]);
+      rows.push(['Notes', g('termsNotes')]);
+      rows.push(['Payment To', g('termsPaymentToName')]);
+      rows.push(['Bank', g('termsBank')]);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{wch:52},{wch:10},{wch:16},{wch:12},{wch:16}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Quotation');
+      const filename = buildFileBaseName() + '.xlsx';
+      XLSX.writeFile(wb, filename);
+    }catch(err){
+      console.error('Excel export failed', err);
+      alert('Something went wrong exporting to Excel.');
+    }finally{
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
+
+  // ---------------- Tracker export (one row per quotation, for the Google Sheet) ----------------
+  // Columns match the tracking sheet exactly: No | Client Name | Address | Quotation No |
+  // Inspection date | Inspection by | Quotation send date | Result.
+  // Rows are grouped by the month of the quotation date, with a month name row above each group
+  // and No restarting at 1 inside it — same shape as the sheet.
+  const TRACKER_HEADERS = ['No','Client Name','Address','Quotation No','Inspection date','Inspection by','Quotation send date','Result'];
+  const MONTH_NAMES = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+
+  // The starting text in these fields is a visual placeholder, not real data — it would otherwise
+  // export as if every untouched quotation belonged to a client literally called "Client Name".
+  const TRACKER_PLACEHOLDERS = ['client name', 'client address, postcode, city', '012-000 0000'];
+  function trackerClean(v){
+    const t = String(v || '').trim();
+    if(!t) return '';
+    return TRACKER_PLACEHOLDERS.indexOf(t.toLowerCase()) > -1 ? '' : t;
+  }
+  function monthBucket(isoDate){
+    // 'YYYY-MM-DD' parsed by hand: `new Date('2026-06-01')` is UTC midnight, which reads back as
+    // the previous month in negative-offset time zones. Malaysia is UTC+8 so it wouldn't bite here,
+    // but string parsing is exact everywhere and cheaper than reasoning about it.
+    const m = /^(\d{4})-(\d{2})/.exec(String(isoDate || ''));
+    if(!m) return { key: '9999-99', label: 'NO DATE' };
+    return { key: m[1] + '-' + m[2], label: MONTH_NAMES[parseInt(m[2],10) - 1] + ' ' + m[1] };
+  }
+
+  async function exportTrackerSheet(){
+    const btn = document.getElementById('exportTrackerBtn');
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+    try{
+      const ok = await ensureXLSXLib();
+      if(!ok || !window.XLSX){
+        alert("Couldn't load the Excel export library — this needs an internet connection the first time you use it.");
+        return;
+      }
+      const idx = await loadIndex();
+      const live = (idx || []).filter(e => e && !e.deletedAt);
+      if(!live.length){ alert('Nothing to export yet — there are no saved quotations.'); return; }
+
+      btn.textContent = 'Reading…';
+      const rowsData = [];
+      for(const entry of live){
+        let state = null;
+        try{
+          const res = await storageAdapter.get(docKey(entry.id), false);
+          if(res && res.value) state = JSON.parse(res.value);
+        }catch(e){ /* unreadable document — fall back to the index summary below */ }
+        const fields = (state && state.fields) || {};
+        const tracking = (state && state.tracking) || {};
+        // A converted quotation keeps its original quote number — that's the number the sheet
+        // tracks, not the invoice number it was given afterwards.
+        const quoteNo = (state && state.docType === 'invoice' && state.originalQuoteNo)
+          ? state.originalQuoteNo
+          : ((state && state.docNo) || entry.docNo || '');
+        const nameRaw = trackerClean(fields.billName);
+        rowsData.push({
+          date: (state && state.docDate) || entry.date || '',
+          client: nameRaw ? nameRaw.split('\n')[0].trim() : '',
+          address: trackerClean(fields.billAddr).split('\n').map(l => l.trim()).filter(Boolean).join(', '),
+          quoteNo: quoteNo,
+          inspectDate: tracking.trackInspectDate || '',
+          inspectBy: tracking.trackInspectBy || '',
+          sendDate: tracking.trackSendDate || '',
+          result: tracking.trackResult || entry.result || ''
+        });
+      }
+
+      // Oldest first, so the sheet reads top-down in the order the work happened.
+      rowsData.sort((a, b) => {
+        const ka = monthBucket(a.date).key, kb = monthBucket(b.date).key;
+        if(ka !== kb) return ka < kb ? -1 : 1;
+        if(a.date !== b.date) return a.date < b.date ? -1 : 1;
+        return String(a.quoteNo).localeCompare(String(b.quoteNo));
+      });
+
+      const rows = [TRACKER_HEADERS.slice()];
+      let currentKey = null, n = 0;
+      rowsData.forEach(r => {
+        const bucket = monthBucket(r.date);
+        if(bucket.key !== currentKey){
+          currentKey = bucket.key;
+          n = 0;
+          rows.push(['', bucket.label, '', '', '', '', '', '']);
+        }
+        n++;
+        rows.push([n, r.client, r.address, r.quoteNo, r.inspectDate, r.inspectBy, r.sendDate, r.result]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{wch:5},{wch:26},{wch:46},{wch:14},{wch:15},{wch:15},{wch:19},{wch:14}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Quotation tracker');
+      const stamp = new Date();
+      const fname = 'Quotation tracker ' + stamp.getFullYear() + '-' +
+        String(stamp.getMonth()+1).padStart(2,'0') + '-' + String(stamp.getDate()).padStart(2,'0') + '.xlsx';
+      XLSX.writeFile(wb, fname);
+    }catch(err){
+      console.error('Tracker export failed', err);
+      alert('Something went wrong building the tracker export.');
+    }finally{
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('exportTrackerBtn').addEventListener('click', exportTrackerSheet);
+
+  // ---------------- Doc No: M/RQYYMMNN running number ----------------
+  // Format: prefix + YY + MM + NN, e.g. M/RQ260819 = 19th quotation of August 2026.
+  // NN restarts at 01 on the 1st of each calendar month and never repeats within a month.
+  //
+  // Two independent sources are consulted every time a number is issued, and the higher wins:
+  //   1. a persisted per-month counter (survives reloads; never decreases, so a number stays
+  //      consumed even after its quotation is permanently deleted), and
+  //   2. the highest NN actually present in the saved index for that month (covers a lost or
+  //      cleared counter, a restored backup, or documents created before this change).
+  // The counter is written at the moment a number is handed out — not when the document is
+  // first saved — so an abandoned draft consumes its number instead of leaking it to the next one.
+  const DOC_KINDS = {
+    quotation: { prefix: 'M/RQ', counter: 'docno_month_' },
+    invoice:   { prefix: 'M/IV', counter: 'invno_month_' }
+  };
+
+  function monthStamp(d){
+    return String(d.getFullYear()).slice(-2) + String(d.getMonth()+1).padStart(2,'0');
+  }
+  function formatDocNo(prefix, stamp, seq){
+    // padStart(2) gives 01..99 and lets 100+ through unpadded rather than truncating
+    return prefix + stamp + String(seq).padStart(2,'0');
+  }
+  // Highest NN already used for this prefix + month anywhere in the index. Trashed documents
+  // are still in the index, so their numbers are counted as used — deleting doesn't free a number.
+  function highestSeqInIndex(idx, prefix, stamp){
+    const head = prefix + stamp;
+    let max = 0;
+    (idx || []).forEach(e => {
+      const no = String((e && e.docNo) || '').trim();
+      if(no.indexOf(head) !== 0) return;
+      const tail = no.slice(head.length);
+      if(!/^\d{2,}$/.test(tail)) return;
+      const n = parseInt(tail, 10);
+      if(n > max) max = n;
+    });
+    return max;
+  }
+
+  async function nextNumberedDoc(kind){
+    const cfg = DOC_KINDS[kind] || DOC_KINDS.quotation;
+    const now = new Date();                      // rule: YY/MM come from the creation date
+    const stamp = monthStamp(now);
+    const counterKey = cfg.counter + now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
+
+    let idx = [];
+    try{ idx = await loadIndex(); }catch(e){ /* unreadable index — fall back to the counter alone */ }
+    const usedNumbers = new Set((idx || []).map(e => String((e && e.docNo) || '').trim()).filter(Boolean));
+    const fromIndex = highestSeqInIndex(idx, cfg.prefix, stamp);
+
+    let seq;
+    if(storageAdapter.increment){
+      // Atomic path (cloud backend): the only way two devices asking at the same instant can
+      // be guaranteed different numbers. Kept wired so re-enabling cloud sync needs no changes here.
+      try{ seq = parseInt(await storageAdapter.increment(counterKey), 10); }catch(e){ seq = NaN; }
+      if(!isFinite(seq) || seq < 1) seq = fromIndex + 1;
+      // The shared counter can lag the index (e.g. after a restore), so burn numbers until it leads.
+      let guard = 0;
+      while(seq <= fromIndex && guard++ < 200){
+        try{ seq = parseInt(await storageAdapter.increment(counterKey), 10); }
+        catch(e){ seq = fromIndex + 1; break; }
+        if(!isFinite(seq) || seq < 1){ seq = fromIndex + 1; break; }
+      }
+    }else{
+      // Single-device tiers (IndexedDB / localStorage / Claude.ai preview): no concurrent caller
+      // is possible, so read-then-write is equivalent to an atomic increment.
+      let stored = 0;
+      try{
+        const res = await storageAdapter.get(counterKey, false);
+        if(res && res.value){ const n = parseInt(res.value, 10); if(isFinite(n) && n > 0) stored = n; }
+      }catch(e){ /* first document of the month, or unreadable — treat as 0 */ }
+      seq = Math.max(stored, fromIndex) + 1;
+    }
+
+    // Final uniqueness check before the number is handed out (belt and braces: the two sources
+    // above should already agree, but an odd manual edit to a Doc No could still collide).
+    let guard = 0;
+    while(usedNumbers.has(formatDocNo(cfg.prefix, stamp, seq)) && guard++ < 500) seq++;
+
+    // Reserve it now, so this number is consumed even if the document is never saved.
+    try{ await storageAdapter.set(counterKey, String(seq), false); }catch(e){ /* ignore */ }
+
+    return formatDocNo(cfg.prefix, stamp, seq);
+  }
+  async function nextDocNo(){ return nextNumberedDoc('quotation'); }
+  async function nextInvoiceNo(){ return nextNumberedDoc('invoice'); }
+  document.getElementById('refreshDocNo').addEventListener('click', async () => {
+    const before = snapshotNow();
+    document.getElementById('docNo').value = docType === 'invoice' ? (await nextInvoiceNo()) : (await nextDocNo());
+    commitHistory(before);
+    scheduleSave();
+  });
+
+  // ---------------- Convert Quotation → Invoice ----------------
+  let docType = 'quotation';
+  let originalQuoteNo = '';
+  function updateConvertButtonUI(){
+    const btn = document.getElementById('convertInvoiceBtn');
+    if(docType === 'invoice'){
+      btn.textContent = originalQuoteNo ? ('🧾 Invoice (from ' + originalQuoteNo + ')') : '🧾 Invoice';
+      btn.disabled = true;
+    } else {
+      btn.textContent = '🧾 Convert to Invoice';
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('convertInvoiceBtn').addEventListener('click', async () => {
+    if(docType === 'invoice') return;
+    if(!confirm('Convert this quotation to an invoice? It will get a new invoice number (the quotation number is kept for reference), and the title changes to "INVOICE". This can still be undone with Ctrl+Z right after.')) return;
+    const before = snapshotNow();
+    originalQuoteNo = document.getElementById('docNo').value;
+    docType = 'invoice';
+    document.getElementById('docNo').value = await nextInvoiceNo();
+    const titleEl = document.getElementById('docTitle');
+    titleEl.innerText = 'Invoice';
+    updateConvertButtonUI();
+    commitHistory(before);
+    scheduleSave();
+  });
+
+  // ---------------- Multi-document library ----------------
+  let currentDocId = null;
+  const INDEX_KEY = 'qb_index';
+  const LEGACY_DRAFT_KEY = 'invoice-draft-v7';
+  function docKey(id){ return 'qb_doc_' + id; }
+
+  // Photos are big (base64 images), and a document's saved JSON blob has a size ceiling.
+  // Storing every photo inline meant a handful of photos could push one document over that
+  // ceiling and silently fail to autosave. Instead, each photo gets its OWN storage key —
+  // the document itself only stores a lightweight reference (photo id + position/zoom/marks),
+  // so a document's size no longer grows with how many photos are in it.
+  function photoKey(docId, photoId){ return 'qb_photo_' + docId + '_' + photoId; }
+
+  function stripPhotoOriginals(state){
+    const clone = JSON.parse(JSON.stringify(state));
+    (clone.items||[]).forEach(it => (it.photos||[]).forEach(p => { delete p.original; }));
+    return clone;
+  }
+  async function savePhotoBlob(docId, photo){
+    if(!photo || !photo.original) return true;
+    try{
+      await storageAdapter.set(photoKey(docId, photo.id), photo.original, false);
+      photo._blobSaved = true;
+      return true;
+    }catch(e){
+      console.error('Failed to save a photo (it will retry on next autosave)', e);
+      return false;
+    }
+  }
+  async function savePhotoBlobsForDoc(docId, state){
+    // Only (re)saves photos not already confirmed saved — keeps routine autosaves cheap
+    // even with many photos, since each photo's image data only needs to be written once.
+    // Returns the count of photos that failed to save, so the caller can surface it instead
+    // of failing silently.
+    let failedCount = 0;
+    for(const it of (state.items||[])){
+      for(const p of (it.photos||[])){
+        const liveItem = items.find(i => i.id === it.id);
+        const livePhoto = liveItem && liveItem.photos.find(ph => ph.id === p.id);
+        if(livePhoto && livePhoto._blobSaved) continue;
+        const ok = await savePhotoBlob(docId, p);
+        if(ok){
+          if(livePhoto) livePhoto._blobSaved = true;
+        }else{
+          failedCount++;
+          // Deliberately NOT marking _blobSaved on failure, so the next autosave retries it.
+        }
+      }
+    }
+    return failedCount;
+  }
+  async function hydratePhotoBlobsForDoc(docId, state){
+    // Returns the count of photos whose original blob couldn't be found in storage, so
+    // callers (e.g. duplicateDoc) can warn instead of silently producing missing photos.
+    let missingCount = 0;
+    for(const it of (state.items||[])){
+      for(const p of (it.photos||[])){
+        if(p.original) continue; // already have it (e.g. undo/redo snapshot, backup restore)
+        try{
+          const res = await storageAdapter.get(photoKey(docId, p.id), false);
+          if(res && res.value){ p.original = res.value; } else { missingCount++; }
+        }catch(e){
+          missingCount++;
+          console.error('Could not load a photo (it may show as missing)', e);
+        }
+      }
+    }
+    return missingCount;
+  }
+  async function deletePhotoBlobsForDoc(docId, state){
+    for(const it of (state.items||[])){
+      for(const p of (it.photos||[])){
+        try{ await storageAdapter.delete(photoKey(docId, p.id), false); }catch(e){ /* ignore */ }
+      }
+    }
+  }
+  async function deletePhotoBlobsForDocId(docId){
+    // Used when we only have a doc id (e.g. permanent-delete flows) — reads the stored
+    // (lightweight) doc first just to discover which photo ids it references.
+    try{
+      const res = await storageAdapter.get(docKey(docId), false);
+      if(res && res.value){
+        const state = JSON.parse(res.value);
+        await deletePhotoBlobsForDoc(docId, state);
+      }
+    }catch(e){ /* doc unreadable or already gone — nothing to clean up */ }
+  }
+
+  function isNotFoundError(e){
+    return /not found/i.test((e && e.message) || '');
+  }
+  async function loadIndexRaw(){
+    // Distinguishes "genuinely nothing saved yet" from "a real read failure happened" —
+    // used by the main list view so a temporary storage hiccup doesn't masquerade as lost data.
+    try{
+      const res = await storageAdapter.get(INDEX_KEY, false);
+      return { ok:true, data: (res && res.value) ? JSON.parse(res.value) : [] };
+    }catch(e){
+      if(isNotFoundError(e)) return { ok:true, data: [] };
+      console.error('Failed to load quotations index', e);
+      return { ok:false, data: [] };
+    }
+  }
+  async function loadIndex(){
+    const r = await loadIndexRaw();
+    return r.data;
+  }
+  async function saveIndex(idx){
+    try{ await storageAdapter.set(INDEX_KEY, JSON.stringify(idx), false); }catch(e){ /* ignore */ }
+  }
+  function summarize(id, state){
+    let client = '';
+    if(state.fields && state.fields.billName) client = state.fields.billName.split('\n')[0].trim();
+    if(!client || client === 'Client Name') client = 'No client name yet';
+    return {
+      id: id,
+      docNo: state.docNo || 'Untitled',
+      docType: state.docType === 'invoice' ? 'invoice' : 'quotation',
+      client: client,
+      date: state.docDate || '',
+      result: (state.tracking && state.tracking.trackResult) || '',
+      total: document.getElementById('grandTotal').textContent,
+      updatedAt: Date.now()
+    };
+  }
+
+  function showListView(){
+    flushSave(); // must run before nulling currentDocId below, or a still-pending debounced
+    // save (e.g. a photo added seconds ago) gets silently cancelled instead of completing
+    document.body.classList.remove('view-editor');
+    document.body.classList.add('view-list');
+    currentDocId = null;
+    renderList();
+  }
+  function showEditorView(){
+    document.body.classList.remove('view-list');
+    document.body.classList.add('view-editor');
+  }
+
+  function timeAgo(ts){
+    if(!ts) return '';
+    const s = Math.max(1, Math.floor((Date.now()-ts)/1000));
+    if(s < 60) return 'just now';
+    const m = Math.floor(s/60); if(m < 60) return 'Updated ' + m + 'm ago';
+    const h = Math.floor(m/60); if(h < 24) return 'Updated ' + h + 'h ago';
+    const d = Math.floor(h/24); if(d < 7) return 'Updated ' + d + 'd ago';
+    return 'Updated ' + new Date(ts).toLocaleDateString();
+  }
+
+  let showingTrash = false;
+  let viewMode = 'grid';
+  let sortField = 'updatedAt';
+  let sortDir = 'desc';
+  let selectedTrashIds = new Set();
+
+  async function loadViewPrefs(){
+    try{
+      const res = await storageAdapter.get('qb_pref', false);
+      if(res && res.value){
+        const p = JSON.parse(res.value);
+        if(p.viewMode === 'list' || p.viewMode === 'grid') viewMode = p.viewMode;
+        if(['updatedAt','client','date','docNo'].includes(p.sortField)) sortField = p.sortField;
+        if(p.sortDir === 'asc' || p.sortDir === 'desc') sortDir = p.sortDir;
+      }
+    }catch(e){ /* use defaults */ }
+  }
+  async function saveViewPrefs(){
+    try{ await storageAdapter.set('qb_pref', JSON.stringify({viewMode, sortField, sortDir}), false); }catch(e){ /* ignore */ }
+  }
+
+  function sortEntries(list){
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return list.slice().sort((a,b) => {
+      let av, bv;
+      if(sortField === 'client'){ av = (a.client||'').toLowerCase(); bv = (b.client||'').toLowerCase(); }
+      else if(sortField === 'date'){ av = a.date||''; bv = b.date||''; }
+      else if(sortField === 'docNo'){ av = (a.docNo||'').toLowerCase(); bv = (b.docNo||'').toLowerCase(); }
+      else { av = showingTrash ? (a.deletedAt||0) : (a.updatedAt||0); bv = showingTrash ? (b.deletedAt||0) : (b.updatedAt||0); }
+      if(av < bv) return -1*dir;
+      if(av > bv) return 1*dir;
+      return 0;
+    });
+  }
+
+  function typeBadgeHTML(docType){
+    const t = docType === 'invoice' ? 'invoice' : 'quotation';
+    return '<span class="doc-type-badge ' + t + '">' + (t === 'invoice' ? 'Invoice' : 'Quote') + '</span>';
+  }
+
+  function updateTrashBulkBar(filteredCount){
+    const bar = document.getElementById('trashBulkActions');
+    bar.style.display = showingTrash ? 'flex' : 'none';
+    const n = selectedTrashIds.size;
+    document.getElementById('restoreSelectedBtn').textContent = n ? ('Restore selected (' + n + ')') : 'Restore selected';
+    document.getElementById('deleteSelectedTrashBtn').textContent = n ? ('Delete selected (' + n + ')') : 'Delete selected';
+    document.getElementById('restoreSelectedBtn').disabled = n === 0;
+    document.getElementById('deleteSelectedTrashBtn').disabled = n === 0;
+    document.getElementById('emptyTrashBtn').disabled = filteredCount === 0;
+    document.getElementById('selectAllTrashBtn').textContent = (filteredCount > 0 && n === filteredCount) ? 'Select none' : 'Select all';
+  }
+
+  async function renderList(){
+    const { ok: loadOk, data: idx } = await loadIndexRaw();
+    const filtered = sortEntries(idx.filter(e => showingTrash ? !!e.deletedAt : !e.deletedAt));
+
+    document.getElementById('listTitle').textContent = showingTrash ? 'Trash' : 'My Quotations';
+    const modeNote = storageMode === 'local'
+      ? " (This file is open outside Claude, so quotations are saved in this browser only — same computer, same browser, won't follow you elsewhere.)"
+      : '';
+    document.getElementById('listSub').textContent = showingTrash
+      ? 'Deleted quotations stay here until you restore or permanently delete them.'
+      : ('Saved automatically as you type. Nothing here is shared unless you send the file or the link.' + modeNote);
+    document.getElementById('trashToggleBtn').textContent = showingTrash ? '← Back to quotations' : '🗑 Trash';
+    document.getElementById('newQuotationBtn').style.display = showingTrash ? 'none' : 'inline-block';
+    document.getElementById('gridViewBtn').classList.toggle('active', viewMode === 'grid');
+    document.getElementById('listViewModeBtn').classList.toggle('active', viewMode === 'list');
+    document.getElementById('sortFieldSelect').value = sortField;
+    document.getElementById('sortDirBtn').textContent = sortDir === 'desc' ? '↓ Desc' : '↑ Asc';
+    updateTrashBulkBar(filtered.length);
+
+    const listEl = document.getElementById('quoteList');
+    const emptyEl = document.getElementById('listEmpty');
+    listEl.innerHTML = '';
+    listEl.className = 'quote-list' + (viewMode === 'list' ? ' list-mode' : '');
+
+    if(!loadOk){
+      // A real read failure, not "genuinely no data" — say so plainly rather than implying data is gone.
+      emptyEl.style.display = 'block';
+      emptyEl.innerHTML = '';
+      const msg = document.createElement('div');
+      msg.textContent = "Couldn't load your quotations just now — this looks like a temporary connection hiccup, not lost data.";
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'btn-ghost';
+      retryBtn.style.marginTop = '14px';
+      retryBtn.textContent = '↻ Retry';
+      retryBtn.onclick = () => renderList();
+      emptyEl.appendChild(msg);
+      emptyEl.appendChild(document.createElement('br'));
+      emptyEl.appendChild(retryBtn);
+      return;
+    }
+
+    emptyEl.style.display = filtered.length ? 'none' : 'block';
+    emptyEl.textContent = showingTrash
+      ? 'Trash is empty.'
+      : 'No quotations yet — click "+ New Quotation" above to start your first one.';
+
+    if(viewMode === 'list' && filtered.length){
+      const header = document.createElement('div');
+      header.className = 'quote-row-header';
+      header.innerHTML =
+        '<span></span><span>Customer</span><span>Quote / Invoice No.</span>' +
+        '<span class="col-date">Date</span><span>Total</span><span class="col-updated">Updated</span>' +
+        '<span>Status</span><span></span>';
+      listEl.appendChild(header);
+    }
+
+    filtered.forEach(entry => {
+      if(viewMode === 'grid') listEl.appendChild(buildGridCard(entry));
+      else listEl.appendChild(buildListRow(entry));
+    });
+  }
+
+  // ---------------- Status (same field as the editor's "Result") ----------------
+  // One value, two places to edit it: this control and the editor's Result box. Kept as a single
+  // field deliberately — a separate "status" would need updating twice and would drift out of sync
+  // with what the tracker export reports.
+  const STATUS_OPTIONS = ['Pending', 'Follow up', 'Still comparing', 'No response after quote', 'Completed', 'Rejected'];
+  const STATUS_DATALIST_ID = 'listStatusOptions';
+  // One shared <datalist> for every status box on the list (grid cards + rows all reference it by
+  // id), so the suggestions live in one place instead of being rebuilt per card.
+  function ensureStatusDatalist(){
+    if(document.getElementById(STATUS_DATALIST_ID)) return;
+    const dl = document.createElement('datalist');
+    dl.id = STATUS_DATALIST_ID;
+    STATUS_OPTIONS.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v;
+      dl.appendChild(o);
+    });
+    document.body.appendChild(dl);
+  }
+  // 'approved' and 'cancelled' are kept recognised (colour-coded) even though they're no longer
+  // offered as suggestions — old quotations saved before this rename/removal still hold those
+  // exact strings (status is free text, so nothing rewrites them), and they'd otherwise lose their
+  // colour and show as plain/uncoded the next time the list renders.
+  function statusClass(v){
+    const k = String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+    return ['pending','followup','completed','approved','rejected','cancelled','stillcomparing','noresponseafterquote'].indexOf(k) > -1 ? ('st-' + k) : '';
+  }
+  // While the box is narrow (list/card default width) a typed sentence can scroll out of view;
+  // grow the box to fit the current text once it's focused/edited, capped by the CSS max-width
+  // above so it never runs off a narrow phone screen. scrollWidth already reflects the full
+  // content width even while the field is showing only part of it, so no text-measuring needed.
+  function autosizeStatusInput(inp){
+    inp.style.width = (inp.scrollWidth + 6) + 'px';
+  }
+  // Free-text input (with the five common values offered as suggestions via <datalist>) rather than
+  // a fixed dropdown — Mike wants to key in a more detailed update ("Follow up 15/9, waiting on
+  // client") straight from the list, not just pick one of five fixed words. Saves on blur/Enter,
+  // same "commit when you leave the field" pattern as the editor's own Result box.
+  function buildStatusInput(entry){
+    ensureStatusDatalist();
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.setAttribute('list', STATUS_DATALIST_ID);
+    inp.placeholder = 'Status';
+    const baseTitle = 'Status — same field as "Result" inside the quotation, and what the tracker export reports. Type anything, or pick a suggestion.';
+    const current = String(entry.result || '').trim();
+    inp.value = current;
+    inp.title = current ? (current + ' — tap to edit') : baseTitle;
+    inp.className = 'status-input ' + statusClass(current);
+    inp.onclick = (e) => e.stopPropagation();   // the card/row underneath opens the document
+    inp.onfocus = () => autosizeStatusInput(inp);
+    inp.oninput = () => autosizeStatusInput(inp);
+    inp.onkeydown = (e) => {
+      e.stopPropagation();
+      if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+      else if(e.key === 'Escape'){ inp.value = current; inp.blur(); }
+    };
+    const commit = async (e) => {
+      e.stopPropagation();
+      inp.style.width = '';   // back to the compact pill width now that editing is done
+      const value = inp.value.trim();
+      if(value === String(entry.result || '').trim()) return;   // nothing actually changed
+      inp.disabled = true;
+      inp.classList.add('st-saving');
+      const saved = await setDocStatus(entry.id, value);
+      inp.disabled = false;
+      inp.classList.remove('st-saving');
+      if(saved){
+        entry.result = value;
+        inp.value = value;
+        inp.title = value ? (value + ' — tap to edit') : baseTitle;
+        inp.className = 'status-input ' + statusClass(value);
+      } else {
+        inp.value = String(entry.result || '');   // put it back rather than showing a value that didn't save
+        alert("Couldn't save that status — nothing was changed.");
+      }
+    };
+    inp.onblur = commit;   // commit on leaving the field (Enter above just forces a blur)
+    return inp;
+  }
+  // Writes to the document itself (the source of truth, and what the tracker export reads), then
+  // updates the index copy the list renders from. Deliberately does NOT bump updatedAt: under the
+  // default "Last updated" sort, doing so would jump the row out from under the pointer mid-click.
+  async function setDocStatus(id, value){
+    try{
+      const res = await storageAdapter.get(docKey(id), false);
+      if(!res || !res.value) return false;
+      const state = JSON.parse(res.value);
+      state.tracking = state.tracking || {};
+      state.tracking.trackResult = value;
+      await storageAdapter.set(docKey(id), JSON.stringify(state), false);
+      const idx = await loadIndex();
+      const i = idx.findIndex(e => e.id === id);
+      if(i > -1){ idx[i].result = value; await saveIndex(idx); }
+      return true;
+    }catch(err){
+      console.error('Status update failed', err);
+      return false;
+    }
+  }
+
+  function buildGridCard(entry){
+    const card = document.createElement('div');
+    card.className = 'quote-card';
+
+    if(showingTrash){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.className = 'quote-card-checkbox';
+      cb.checked = selectedTrashIds.has(entry.id);
+      cb.onclick = (e) => { e.stopPropagation(); toggleTrashSelect(entry.id); };
+      card.appendChild(cb);
+    }
+
+    const main = document.createElement('div');
+    main.className = 'quote-card-main';
+    main.innerHTML =
+      '<div class="quote-card-title"></div>' +
+      '<div class="quote-card-sub"></div>' +
+      '<div class="quote-card-meta"><span></span><span class="amt"></span></div>' +
+      '<div class="quote-card-updated"></div>';
+    main.querySelector('.quote-card-title').innerHTML = typeBadgeHTML(entry.docType) + (entry.docNo || 'Untitled');
+    main.querySelector('.quote-card-sub').textContent = entry.client || '';
+    main.querySelector('.quote-card-meta span').textContent = entry.date || '';
+    main.querySelector('.quote-card-meta .amt').textContent = entry.total || '';
+    main.querySelector('.quote-card-updated').textContent = showingTrash
+      ? ('Deleted ' + timeAgo(entry.deletedAt).replace(/^Updated /, ''))
+      : timeAgo(entry.updatedAt);
+    if(!showingTrash) main.onclick = () => openDoc(entry.id);
+    else main.onclick = () => toggleTrashSelect(entry.id);
+    card.appendChild(main);
+
+    if(!showingTrash){
+      const statusWrap = document.createElement('div');
+      statusWrap.className = 'quote-card-status';
+      statusWrap.appendChild(buildStatusInput(entry));
+      card.appendChild(statusWrap);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'quote-card-actions';
+    if(showingTrash){
+      const restoreBtn = document.createElement('button'); restoreBtn.className='qc-open'; restoreBtn.textContent='Restore'; restoreBtn.onclick=(e)=>{ e.stopPropagation(); restoreDoc(entry.id); };
+      const purgeBtn = document.createElement('button'); purgeBtn.className='qc-del'; purgeBtn.textContent='Delete forever'; purgeBtn.onclick=(e)=>{ e.stopPropagation(); permanentlyDeleteDoc(entry.id, entry.docNo); };
+      actions.appendChild(restoreBtn); actions.appendChild(purgeBtn);
+    } else {
+      const openBtn = document.createElement('button'); openBtn.className='qc-open'; openBtn.textContent='Open'; openBtn.onclick=()=>openDoc(entry.id);
+      const dupBtn = document.createElement('button'); dupBtn.className='qc-dup'; dupBtn.textContent='Duplicate'; dupBtn.onclick=(e)=>{ e.stopPropagation(); duplicateDoc(entry.id); };
+      const delBtn = document.createElement('button'); delBtn.className='qc-del'; delBtn.textContent='Delete'; delBtn.onclick=(e)=>{ e.stopPropagation(); deleteDoc(entry.id, entry.docNo); };
+      actions.appendChild(openBtn); actions.appendChild(dupBtn); actions.appendChild(delBtn);
+    }
+    card.appendChild(actions);
+    return card;
+  }
+
+  function buildListRow(entry){
+    const row = document.createElement('div');
+    row.className = 'quote-row';
+
+    const checkWrap = document.createElement('span');
+    if(showingTrash){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selectedTrashIds.has(entry.id);
+      cb.onclick = (e) => { e.stopPropagation(); toggleTrashSelect(entry.id); };
+      checkWrap.appendChild(cb);
+    }
+    row.appendChild(checkWrap);
+
+    const clientEl = document.createElement('span');
+    clientEl.className = 'quote-row-client';
+    clientEl.textContent = entry.client || '';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'quote-row-title';
+    titleEl.innerHTML = typeBadgeHTML(entry.docType) + (entry.docNo || 'Untitled');
+    const dateEl = document.createElement('span');
+    dateEl.className = 'quote-row-date col-date';
+    dateEl.textContent = entry.date || '';
+    const amtEl = document.createElement('span');
+    amtEl.className = 'quote-row-amt';
+    amtEl.textContent = entry.total || '';
+    const updEl = document.createElement('span');
+    updEl.className = 'quote-row-updated col-updated';
+    updEl.textContent = showingTrash ? ('Deleted ' + timeAgo(entry.deletedAt).replace(/^Updated /, '')) : timeAgo(entry.updatedAt);
+
+    const clickToOpen = showingTrash ? () => toggleTrashSelect(entry.id) : () => openDoc(entry.id);
+    [clientEl, titleEl, dateEl, amtEl, updEl].forEach(el => { el.onclick = clickToOpen; });
+    row.appendChild(clientEl); row.appendChild(titleEl); row.appendChild(dateEl); row.appendChild(amtEl); row.appendChild(updEl);
+
+    const statusCell = document.createElement('span');
+    statusCell.className = 'status-cell';
+    // Trash rows keep the column so the grid stays aligned, but no editable control
+    if(!showingTrash) statusCell.appendChild(buildStatusInput(entry));
+    row.appendChild(statusCell);
+
+    const actions = document.createElement('span');
+    actions.className = 'quote-row-actions';
+    if(showingTrash){
+      const restoreBtn = document.createElement('button'); restoreBtn.className='qc-open'; restoreBtn.textContent='Restore'; restoreBtn.onclick=(e)=>{ e.stopPropagation(); restoreDoc(entry.id); };
+      const purgeBtn = document.createElement('button'); purgeBtn.className='qc-del'; purgeBtn.textContent='Delete forever'; purgeBtn.onclick=(e)=>{ e.stopPropagation(); permanentlyDeleteDoc(entry.id, entry.docNo); };
+      actions.appendChild(restoreBtn); actions.appendChild(purgeBtn);
+    } else {
+      const openBtn = document.createElement('button'); openBtn.className='qc-open'; openBtn.textContent='Open'; openBtn.onclick=()=>openDoc(entry.id);
+      const dupBtn = document.createElement('button'); dupBtn.className='qc-dup'; dupBtn.textContent='Duplicate'; dupBtn.onclick=(e)=>{ e.stopPropagation(); duplicateDoc(entry.id); };
+      const delBtn = document.createElement('button'); delBtn.className='qc-del'; delBtn.textContent='Delete'; delBtn.onclick=(e)=>{ e.stopPropagation(); deleteDoc(entry.id, entry.docNo); };
+      actions.appendChild(openBtn); actions.appendChild(dupBtn); actions.appendChild(delBtn);
+    }
+    row.appendChild(actions);
+    return row;
+  }
+
+  function toggleTrashSelect(id){
+    if(selectedTrashIds.has(id)) selectedTrashIds.delete(id); else selectedTrashIds.add(id);
+    renderList();
+  }
+
+  document.getElementById('trashToggleBtn').addEventListener('click', () => {
+    showingTrash = !showingTrash;
+    selectedTrashIds = new Set();
+    renderList();
+  });
+  document.getElementById('gridViewBtn').addEventListener('click', () => { viewMode = 'grid'; saveViewPrefs(); renderList(); });
+  document.getElementById('listViewModeBtn').addEventListener('click', () => { viewMode = 'list'; saveViewPrefs(); renderList(); });
+  document.getElementById('sortFieldSelect').addEventListener('change', (e) => { sortField = e.target.value; saveViewPrefs(); renderList(); });
+  document.getElementById('sortDirBtn').addEventListener('click', () => { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; saveViewPrefs(); renderList(); });
+
+  document.getElementById('selectAllTrashBtn').addEventListener('click', async () => {
+    const idx = await loadIndex();
+    const trashIds = idx.filter(e => e.deletedAt).map(e => e.id);
+    if(selectedTrashIds.size === trashIds.length){ selectedTrashIds = new Set(); }
+    else { selectedTrashIds = new Set(trashIds); }
+    renderList();
+  });
+  document.getElementById('restoreSelectedBtn').addEventListener('click', async () => {
+    if(!selectedTrashIds.size) return;
+    const idx = await loadIndex();
+    idx.forEach(e => { if(selectedTrashIds.has(e.id)) delete e.deletedAt; });
+    await saveIndex(idx);
+    selectedTrashIds = new Set();
+    renderList();
+  });
+  document.getElementById('deleteSelectedTrashBtn').addEventListener('click', async () => {
+    if(!selectedTrashIds.size) return;
+    if(!confirm('Permanently delete ' + selectedTrashIds.size + ' selected quotation(s)? This cannot be undone.')) return;
+    for(const id of selectedTrashIds){
+      await deletePhotoBlobsForDocId(id);
+      try{ await storageAdapter.delete(docKey(id), false); }catch(e){ /* ignore */ }
+    }
+    const idx = await loadIndex();
+    await saveIndex(idx.filter(e => !selectedTrashIds.has(e.id)));
+    selectedTrashIds = new Set();
+    renderList();
+  });
+  document.getElementById('emptyTrashBtn').addEventListener('click', async () => {
+    const idx = await loadIndex();
+    const trashEntries = idx.filter(e => e.deletedAt);
+    if(!trashEntries.length) return;
+    if(!confirm('Permanently delete all ' + trashEntries.length + ' item(s) in Trash? This cannot be undone.')) return;
+    for(const e of trashEntries){
+      await deletePhotoBlobsForDocId(e.id);
+      try{ await storageAdapter.delete(docKey(e.id), false); }catch(err){ /* ignore */ }
+    }
+    await saveIndex(idx.filter(e => !e.deletedAt));
+    selectedTrashIds = new Set();
+    renderList();
+  });
+
+  // ---------------- Backup / Restore (for moving your library between devices) ----------------
+  async function exportBackup(){
+    const btn = document.getElementById('exportBackupBtn');
+    const originalLabel = btn.textContent;
+    btn.textContent = '⏳ Preparing backup…';
+    btn.disabled = true;
+    try{
+      const idx = await loadIndex();
+      const docs = {};
+      for(const entry of idx){
+        try{
+          const res = await storageAdapter.get(docKey(entry.id), false);
+          if(res && res.value){
+            const state = JSON.parse(res.value);
+            await hydratePhotoBlobsForDoc(entry.id, state);
+            docs[entry.id] = state;
+          }
+        }catch(e){ /* skip missing/unreadable doc */ }
+      }
+      const backup = { version: 1, exportedAt: Date.now(), index: idx, docs: docs };
+      const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'quotations-backup-' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }finally{
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+    }
+  }
+
+  async function importBackupFile(file){
+    const trigger = document.getElementById('importBackupBtnTrigger');
+    const originalLabel = trigger.textContent;
+    trigger.textContent = '⏳ Restoring…';
+    trigger.disabled = true;
+    try{
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      if(!backup || !Array.isArray(backup.index) || typeof backup.docs !== 'object'){
+        alert("That doesn't look like a quotations backup file.");
+        return;
+      }
+      const idx = await loadIndex();
+      let added = 0, updated = 0;
+      for(const entry of backup.index){
+        const docState = backup.docs[entry.id];
+        if(!docState) continue;
+        const i = idx.findIndex(e => e.id === entry.id);
+        if(i === -1 || (entry.updatedAt||0) > (idx[i].updatedAt||0)){
+          if(!entry.createdBy) entry.createdBy = (i > -1 && idx[i].createdBy) ? idx[i].createdBy : currentUserEmail();
+          await savePhotoBlobsForDoc(entry.id, docState);
+          const lightState = stripPhotoOriginals(docState);
+          await storageAdapter.set(docKey(entry.id), JSON.stringify(lightState), false);
+          if(i === -1){ idx.push(entry); added++; } else { idx[i] = entry; updated++; }
+        }
+      }
+      await saveIndex(idx);
+      renderList();
+      alert('Backup restored: ' + added + ' new quotation(s), ' + updated + ' updated. Existing newer quotations were left as-is.');
+    }catch(err){
+      console.error('Import failed', err);
+      alert("Couldn't read that backup file — make sure it's a backup downloaded from this tool's \"⇩ Backup\" button.");
+    }finally{
+      trigger.textContent = originalLabel;
+      trigger.disabled = false;
+    }
+  }
+
+  document.getElementById('exportBackupBtn').addEventListener('click', exportBackup);
+  document.getElementById('importBackupBtnTrigger').addEventListener('click', () => {
+    document.getElementById('importBackupInput').click();
+  });
+  document.getElementById('importBackupInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(file) importBackupFile(file);
+    e.target.value = '';
+  });
+
+  async function openDoc(id){
+    try{
+      flushSave(); // defensive: same reasoning as showListView — don't let a pending save
+      // for whatever was previously open get silently dropped by switching currentDocId
+      const res = await storageAdapter.get(docKey(id), false);
+      if(!res || !res.value){ alert("Couldn't find that quotation — it may have been deleted."); renderList(); return; }
+      const state = JSON.parse(res.value);
+      currentDocId = id;
+      undoStack = []; redoStack = [];
+      restoring = true;
+      await applyState(state);
+      restoring = false;
+      updateUndoRedoButtons();
+      updateConvertButtonUI();
+      showEditorView();
+    }catch(err){
+      console.error('Open failed', err);
+      alert('Something went wrong opening that quotation.');
+    }
+  }
+
+  function resetEditorToDefaults(){
+    FIELD_IDS.forEach(id => { const el = document.getElementById(id); if(el) el.innerText = ORIGINAL_FIELDS[id] || ''; });
+    TRACK_IDS.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    logoBox.innerHTML = '';
+    const img = document.createElement('img'); img.src = ORIGINAL_LOGO; logoBox.appendChild(img);
+    document.getElementById('currencySelect').value = 'RM';
+    layout = { photoFr:60, descFr:40, qtyPx:120, pricePx:80, totalPx:130 };
+    applyLayoutVars();
+    items = [];
+    docType = 'quotation';
+    originalQuoteNo = '';
+  }
+
+  async function newQuotation(){
+    currentDocId = uid('doc');
+    undoStack = []; redoStack = [];
+    restoring = true;
+    resetEditorToDefaults();
+    document.getElementById('docNo').value = await nextDocNo();
+    document.getElementById('docDate').valueAsDate = new Date();
+    addItemSilent();
+    restoring = false;
+    updateUndoRedoButtons();
+    updateConvertButtonUI();
+    showEditorView();
+    scheduleSave();
+  }
+
+  async function duplicateDoc(id){
+    try{
+      const res = await storageAdapter.get(docKey(id), false);
+      if(!res || !res.value) return;
+      const state = JSON.parse(res.value);
+      state.docNo = (state.docType === 'invoice') ? (await nextInvoiceNo()) : (await nextDocNo());
+      const newId = uid('doc');
+      const missingCount = await hydratePhotoBlobsForDoc(id, state);
+      const failedCount = await savePhotoBlobsForDoc(newId, state);
+      const lightState = stripPhotoOriginals(state);
+      await storageAdapter.set(docKey(newId), JSON.stringify(lightState), false);
+      const idx = await loadIndex();
+      const newEntry = Object.assign({id:newId}, summarizeStateOnly(newId, state));
+      newEntry.createdBy = currentUserEmail();
+      idx.unshift(newEntry);
+      await saveIndex(idx);
+      renderList();
+      const brokenCount = missingCount + failedCount;
+      if(brokenCount > 0){
+        alert('Duplicated, but ' + (brokenCount === 1 ? '1 photo' : brokenCount + ' photos') +
+          " couldn't be copied over — open the duplicate and re-upload " +
+          (brokenCount === 1 ? 'it' : 'them') + ' where you see "Photo failed to save".');
+      }
+    }catch(err){
+      console.error('Duplicate failed', err);
+      alert('Something went wrong duplicating that quotation.');
+    }
+  }
+  function summarizeStateOnly(id, state){
+    let client = '';
+    if(state.fields && state.fields.billName) client = state.fields.billName.split('\n')[0].trim();
+    if(!client || client === 'Client Name') client = 'No client name yet';
+    let total = '';
+    try{
+      let grand = 0;
+      (state.items||[]).forEach(it => { grand += parseNum(it.total); });
+      const sym = state.currency !== undefined ? state.currency : 'RM';
+      total = (sym ? sym+' ' : '') + grand.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+    }catch(e){ /* ignore */ }
+    return { docNo: state.docNo || 'Untitled', docType: state.docType === 'invoice' ? 'invoice' : 'quotation', client: client, date: state.docDate || '', result: (state.tracking && state.tracking.trackResult) || '', total: total, updatedAt: Date.now() };
+  }
+
+  async function deleteDoc(id, label){
+    if(!confirm('Move quotation "' + (label||'this quotation') + '" to Trash? You can restore it later.')) return;
+    const idx = await loadIndex();
+    const i = idx.findIndex(e => e.id === id);
+    if(i > -1){ idx[i].deletedAt = Date.now(); await saveIndex(idx); }
+    renderList();
+  }
+
+  async function restoreDoc(id){
+    const idx = await loadIndex();
+    const i = idx.findIndex(e => e.id === id);
+    if(i > -1){ delete idx[i].deletedAt; await saveIndex(idx); }
+    renderList();
+  }
+
+  async function permanentlyDeleteDoc(id, label){
+    if(!confirm('Permanently delete "' + (label||'this quotation') + '"? This cannot be undone.')) return;
+    await deletePhotoBlobsForDocId(id);
+    try{ await storageAdapter.delete(docKey(id), false); }catch(e){ /* ignore */ }
+    const idx = await loadIndex();
+    await saveIndex(idx.filter(e => e.id !== id));
+    renderList();
+  }
+
+  document.getElementById('newQuotationBtn').addEventListener('click', newQuotation);
+  document.getElementById('backToListBtn').addEventListener('click', showListView);
+  document.getElementById('deleteDocBtn').addEventListener('click', async () => {
+    if(!currentDocId) return;
+    const label = document.getElementById('docNo').value;
+    if(!confirm('Move quotation "' + label + '" to Trash? You can restore it later from the Trash on the main page.')) return;
+    const idx = await loadIndex();
+    const i = idx.findIndex(e => e.id === currentDocId);
+    if(i > -1){ idx[i].deletedAt = Date.now(); await saveIndex(idx); }
+    showListView();
+  });
+  function addItemSilent(){ items.push(newItem()); renderItems(); }
+
+  // ---------------- Autosave (per-document) ----------------
+  function serializeState(){
+    const fields = {};
+    FIELD_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      fields[id] = el ? el.innerText : '';
+    });
+    const tracking = {};
+    TRACK_IDS.forEach(id => { const el = document.getElementById(id); tracking[id] = el ? el.value : ''; });
+    return {
+      docNo: document.getElementById('docNo').value,
+      docDate: document.getElementById('docDate').value,
+      docType: docType,
+      tracking: tracking,
+      originalQuoteNo: originalQuoteNo,
+      currency: document.getElementById('currencySelect').value,
+      logo: (logoBox.querySelector('img')||{}).src || null,
+      layout: layout,
+      fields: fields,
+      items: items.map(it => ({
+        id: it.id,
+        descriptions: (it.descriptions||[]).map(b => ({ id:b.id, html:b.html, height:b.height })),
+        qty: it.qty, qtyCalc: it.qtyCalc, price: it.price,
+        total: it.total, totalManual: it.totalManual,
+        photos: it.photos.map(p => ({
+          id:p.id, original:p.original, marks:p.marks, w:p.w, h:p.h,
+          dispW:p.dispW, dispH:p.dispH, zoom:p.zoom, panX:p.panX, panY:p.panY
+        }))
+      }))
+    };
+  }
+
+  async function applyState(state){
+    document.getElementById('docNo').value = state.docNo || '';
+    if(state.docDate) document.getElementById('docDate').value = state.docDate;
+    docType = state.docType === 'invoice' ? 'invoice' : 'quotation';
+    originalQuoteNo = state.originalQuoteNo || '';
+    if(state.currency !== undefined) document.getElementById('currencySelect').value = state.currency;
+    if(state.logo){
+      logoBox.innerHTML = '';
+      const img = document.createElement('img'); img.src = state.logo; logoBox.appendChild(img);
+    }
+    if(state.layout){
+      layout = Object.assign({photoFr:60,descFr:40,qtyPx:120,pricePx:80,totalPx:130}, state.layout);
+      applyLayoutVars();
+    }
+    if(state.fields){
+      FIELD_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if(el && state.fields[id] !== undefined) el.innerText = state.fields[id];
+      });
+    }
+    // Documents saved before tracking existed simply have no `tracking` key — blank them out
+    // rather than leaving the previous document's values on screen.
+    TRACK_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.value = (state.tracking && state.tracking[id]) ? state.tracking[id] : '';
+    });
+    await hydratePhotoBlobsForDoc(currentDocId, state);
+    items = (state.items||[]).map(it => {
+      let descriptions;
+      if(it.descriptions && it.descriptions.length){
+        descriptions = it.descriptions.map(b => ({ id: b.id||uid('db'), html: b.html||'', height: b.height||DEFAULT_ROW_H }));
+      } else if(typeof it.description === 'string'){
+        // migrate old single-description format
+        descriptions = [ newDescBlock(it.description.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>')) ];
+      } else {
+        descriptions = [ newDescBlock('') ];
+      }
+      return {
+        id: it.id || uid('it'),
+        descriptions: descriptions,
+        qty: (it.qty!==undefined?it.qty:'1'), qtyCalc: (it.qtyCalc!==undefined?it.qtyCalc:''), price: (it.price!==undefined?it.price:''),
+        total: it.total||'', totalManual: !!it.totalManual,
+        photos: (it.photos||[]).map(p => {
+          const obj = {
+            id: p.id||uid('ph'), original:p.original, marks:p.marks||[], w:p.w, h:p.h, imgEl:null,
+            dispW: p.dispW||DEFAULT_W, dispH: p.dispH||DEFAULT_H, zoom: p.zoom||1, panX: p.panX||0, panY: p.panY||0,
+            _blobSaved: true
+          };
+          if(p.original){
+            const img = new Image();
+            img.onload = () => { obj.imgEl = img; renderItems(); };
+            img.src = p.original;
+          }
+          return obj;
+        })
+      };
+    });
+    if(items.length === 0) addItemSilent(); else renderItems();
+  }
+
+  async function performSave(){
+    if(!currentDocId) return;
+    const docId = currentDocId; // captured now — currentDocId can change (e.g. navigating
+    // back to the list) while this save is still in flight after an await; every reference
+    // below uses this local copy so a save in progress can't get written to the wrong
+    // document (or 'qb_doc_null') if the user navigates away mid-save.
+    const note = document.getElementById('autosaveNote');
+    try{
+      const state = serializeState();
+      const failedPhotos = await savePhotoBlobsForDoc(docId, state);
+      const lightState = stripPhotoOriginals(state);
+      const result = await storageAdapter.set(docKey(docId), JSON.stringify(lightState), false);
+      const idx = await loadIndex();
+      const i = idx.findIndex(e => e.id === docId);
+      const entry = Object.assign({id: docId}, summarize(docId, state));
+      entry.createdBy = (i > -1 && idx[i].createdBy) ? idx[i].createdBy : currentUserEmail();
+      if(i > -1) idx[i] = entry; else idx.unshift(entry);
+      await saveIndex(idx);
+      if(failedPhotos > 0){
+        note.textContent = (failedPhotos === 1 ? '1 photo' : failedPhotos + ' photos') + " didn't save — keep this tab open, it will retry";
+      }else{
+        note.textContent = result ? ('Saved ' + new Date().toLocaleTimeString()) : 'Autosave unavailable';
+      }
+    }catch(err){
+      console.error('Autosave failed', err);
+      note.textContent = 'Autosave paused — remember to Save as PDF';
+    }
+  }
+  function scheduleSave(){
+    if(!currentDocId) return; // nothing open (e.g. list view) — nothing to save
+    document.getElementById('autosaveNote').textContent = 'Saving…';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(performSave, 1200);
+  }
+  function flushSave(){
+    if(!currentDocId || !saveTimer) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    performSave();
+  }
+  // Safety net so nothing typed gets lost if the tab is closed/switched right after typing —
+  // same idea as Google Docs saving immediately when you navigate away.
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') flushSave(); });
+  window.addEventListener('pagehide', flushSave);
+  window.addEventListener('beforeunload', flushSave);
+
+  async function migrateLegacyDraftIfAny(){
+    try{
+      const res = await storageAdapter.get(LEGACY_DRAFT_KEY, false);
+      if(!res || !res.value) return;
+      const state = JSON.parse(res.value);
+      const id = uid('doc');
+      await savePhotoBlobsForDoc(id, state);
+      const lightState = stripPhotoOriginals(state);
+      await storageAdapter.set(docKey(id), JSON.stringify(lightState), false);
+      const idx = await loadIndex();
+      idx.unshift(Object.assign({id:id}, summarizeStateOnly(id, state)));
+      await saveIndex(idx);
+      await storageAdapter.delete(LEGACY_DRAFT_KEY, false);
+    }catch(err){
+      // Best-effort, one-time check for a legacy single-draft format. Whether it's genuinely
+      // absent or a transient read hiccup, there's nothing actionable for the person here —
+      // never surface this as an error.
+    }
+  }
+
+  document.getElementById('docNo').addEventListener('focus', function(){ this._before = snapshotNow(); });
+  document.getElementById('docNo').addEventListener('blur', function(){ commitHistory(this._before); this._before=null; });
+  document.getElementById('docNo').addEventListener('input', scheduleSave);
+  document.getElementById('docDate').addEventListener('focus', function(){ this._before = snapshotNow(); });
+  document.getElementById('docDate').addEventListener('input', function(){ scheduleSave(); commitHistory(this._before); this._before = snapshotNow(); });
+
+  // ---------------- Boot ----------------
+  async function boot(){
+    await loadViewPrefs();
+    await migrateLegacyDraftIfAny();
+    updateUndoRedoButtons();
+    updateConvertButtonUI();
+    showListView();
+  }
+  boot();
+
+})();
+</script>
+</body>
+</html>
